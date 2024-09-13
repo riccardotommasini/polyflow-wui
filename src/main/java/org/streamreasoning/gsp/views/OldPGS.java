@@ -1,20 +1,9 @@
-package org.streamreasoning.gsp.views.rsp;
+package org.streamreasoning.gsp.views;
 
-import com.vaadin.flow.server.Command;
-import org.streamreasoning.gsp.data.EventGraph;
-import org.streamreasoning.gsp.data.Result;
-import org.streamreasoning.gsp.seraph.data.PGraph;
-import org.streamreasoning.gsp.seraph.data.PGraphImpl;
-import org.streamreasoning.gsp.seraph.data.Source;
-import org.streamreasoning.gsp.seraph.engine.ContentPGraph;
-import org.streamreasoning.gsp.seraph.syntax.SeraphQL;
-import org.streamreasoning.gsp.services.SeraphService;
-import org.streamreasoning.gsp.services.SeraphString;
-import org.streamreasoning.gsp.services.TATableService;
-import org.streamreasoning.gsp.views.MainLayout;
 import com.google.common.collect.Sets;
 import com.vaadin.componentfactory.Popup;
-import com.vaadin.flow.component.*;
+import com.vaadin.flow.component.ComponentEventListener;
+import com.vaadin.flow.component.Composite;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
@@ -35,23 +24,30 @@ import com.vaadin.flow.component.timepicker.TimePicker;
 import com.vaadin.flow.data.provider.ListDataProvider;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.spring.data.VaadinSpringDataHelpers;
+import com.vaadin.flow.server.Command;
 import com.vaadin.flow.theme.lumo.LumoUtility.Gap;
 import de.f0rce.ace.AceEditor;
 import de.f0rce.ace.enums.AceCustomModeTokens;
 import de.f0rce.ace.enums.AceTheme;
 import de.f0rce.ace.util.AceCustomMode;
 import de.f0rce.ace.util.AceCustomModeRule;
+import graph.seraph.events.PGraph;
+import graph.seraph.events.PGraphImpl;
+import graph.seraph.events.PGraphOrResult;
+import graph.seraph.events.Result;
+import graph.seraph.syntax.SeraphQuery;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.PageRequest;
-import org.streamreasoning.rsp4j.api.querying.ContinuousQueryExecution;
+import org.streamreasoning.gsp.data.InputGraph;
+import org.streamreasoning.gsp.services.SeraphService;
 import org.vaadin.addons.visjs.network.main.Edge;
 import org.vaadin.addons.visjs.network.main.NetworkDiagram;
 import org.vaadin.addons.visjs.network.main.Node;
 import org.vaadin.addons.visjs.network.options.HierarchicalLayout;
 import org.vaadin.addons.visjs.network.options.Interaction;
 import org.vaadin.addons.visjs.network.options.Options;
-import org.vaadin.addons.visjs.network.options.edges.*;
+import org.vaadin.addons.visjs.network.options.edges.ArrowHead;
+import org.vaadin.addons.visjs.network.options.edges.Arrows;
+import org.vaadin.addons.visjs.network.options.edges.Layout;
 import org.vaadin.addons.visjs.network.options.physics.Physics;
 import org.vaadin.addons.visjs.network.options.physics.Repulsion;
 import org.vaadin.addons.visjs.network.util.Shape;
@@ -73,7 +69,7 @@ import java.util.stream.Stream;
 @PageTitle("Seraph")
 @Route(value = "", layout = MainLayout.class)
 @Uses(Icon.class)
-public class RSPView extends Composite<VerticalLayout> {
+public class OldPGS extends Composite<VerticalLayout> {
 
     static Random random = new Random();
     static AtomicInteger idCounter = new AtomicInteger();
@@ -81,9 +77,8 @@ public class RSPView extends Composite<VerticalLayout> {
     private String labels = "Bike;Station";
     static boolean paused = true;
     static String inputStream = "http://stream1";
-    static ContinuousQueryExecution<PGraph, PGraph, Map<String, Object>, Map<String, Object>> cqe;
 
-    public RSPView() {
+    public OldPGS() {
 
         HorizontalLayout inputRow = new HorizontalLayout();
         HorizontalLayout streamView = new HorizontalLayout();
@@ -183,7 +178,7 @@ public class RSPView extends Composite<VerticalLayout> {
 
         String fileName2 = "testGraph" + random.nextInt(1, 10) + ".json";
         //Create a property graph using the test.json as a base
-        URL url2 = Source.class.getClassLoader().getResource(fileName2);
+        URL url2 = OldPGS.class.getClassLoader().getResource(fileName2);
         FileReader fileReader2 = null;
         try {
             fileReader2 = new FileReader(url2.getPath());
@@ -192,7 +187,7 @@ public class RSPView extends Composite<VerticalLayout> {
         }
         PGraph pGraph = PGraphImpl.fromJson(fileReader2);
 
-        EventGraph eventGraph = loadEvent(nextEventWindow, pGraph, "90%", labels, idCounter.getAndIncrement() * 1000L);
+        InputGraph eventGraph = loadEvent(nextEventWindow, pGraph, "90%", labels, idCounter.getAndIncrement() * 1000L);
 
         processingTabSheet.add(new Tab("Next Event"), outerNextEventWindow);
 
@@ -286,18 +281,13 @@ public class RSPView extends Composite<VerticalLayout> {
         editor.setTheme(AceTheme.sqlserver);
         setUpAce(editor);
         editor.setValue("" +
-                        "REGISTER QUERY <student_trick> STARTING AT 2022-10-14T14:45 {\n" +
+                        "REGISTER QUERY student_trick STARTING AT NOW {\n" +
                         "MATCH (b:Bike)-[r]->(s:Station)\n" +
                         "WITHIN PT10S\n" +
                         "EMIT b.bike_id as source, type(r) as edge, s.station_id as dest\n" +
                         "ON ENTERING\n" +
                         "EVERY PT5S\n" +
                         "}");
-//                        editor.setValue("REGISTER QUERY testQuery STARTING AT datetime() {\n" +
-//                        "MATCH (n) -[p]-> (m) \n" +
-//                        "EMIT n,p,m SNAPSHOT EVERY PT5S\n" +
-//                        "\n" +
-//                        "}");
 
         HorizontalLayout trash = new HorizontalLayout();
 
@@ -410,7 +400,7 @@ public class RSPView extends Composite<VerticalLayout> {
         removeQuery.setWidth("min-content");
         removeQuery.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         removeQuery.addClickListener(e -> {
-            seraphService.parse(new SeraphString(editor.getValue())).getID();
+//            seraphService.parse(editor.getValue())).getID();
         });
 
         Button nextEventButton = ingestOneEvent(streamView, nextEventWindow, snapshotGraphFunction, snapshotGraphSolo, outputRow);
@@ -487,15 +477,14 @@ public class RSPView extends Composite<VerticalLayout> {
         sendQuery.setWidth("min-content");
         sendQuery.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         sendQuery.addClickListener(e -> {
-            cqe = seraphService.register(new SeraphString(editor.getValue()), inputStream);
+            SeraphQuery<PGraph, PGraph, PGraphOrResult, Result> cqe = seraphService.register(editor.getValue(), inputStream);
 
             List<Result> res = new ArrayList<>();
             MyDataProvider<Result> resultDataProvider = new MyDataProvider<>(res);
             lastTAT.setDataProvider(resultDataProvider);
             nowgrid.setDataProvider(resultDataProvider);
 
-            SeraphQL query = (SeraphQL) cqe.query();
-            query.getResultVars().forEach(k -> {
+            cqe.getResultVars().forEach(k -> {
                 lastTAT.addColumn(map -> map.get(k)).setHeader(k);
                 nowgrid.addColumn(map -> map.get(k)).setHeader(k);
             });
@@ -514,9 +503,8 @@ public class RSPView extends Composite<VerticalLayout> {
             lastTAT.addColumn(map -> map.get("win_end")).setHeader("win_end");
             nowgrid.addColumn(map -> map.get("win_end")).setHeader("win_end");
 
-            cqe.outstream().addConsumer((arg, ts) -> {
-                        arg.put("Id", idCounter.getAndIncrement());
-                        Result result = new Result(arg);
+            cqe.outstream().addConsumer((stream, result, ts) -> {
+                        result.put("Id", idCounter.getAndIncrement());
                         //Update tables
 
 
@@ -527,10 +515,11 @@ public class RSPView extends Composite<VerticalLayout> {
                         resultDataProvider.refreshAll();
 
                         appendResultTable(outputRow, result, ts, res);
-                        updateSnapshotGraphFromContent(snapshotGraphFunction, nodes, edges, seraphService.getContent(ts));
-                        updateSnapshotGraphFromContent(snapshotGraphSolo, nodes, edges, seraphService.getContent(ts));
+                        List<PGraph> list = cqe.getTask().getSDS().toStream().map(PGraphOrResult::getContent).toList();
+                        updateSnapshotGraphFromContent(snapshotGraphFunction, nodes, edges, list);
+                        updateSnapshotGraphFromContent(snapshotGraphSolo, nodes, edges, list);
                         timePicker1.setValue(LocalTime.ofInstant(Instant.ofEpochMilli(ts), ZoneId.systemDefault()));
-                        System.out.println(arg);
+                        System.out.println(result);
                     }
             );
 
@@ -551,7 +540,7 @@ public class RSPView extends Composite<VerticalLayout> {
 
         nextEventButton.addClickListener(e -> {
 
-            if (cqe == null) {
+            if (seraphService.listQueries().isEmpty()) {
                 Notification.show("Register a query first!", 1000, Notification.Position.MIDDLE);
                 return;
             }
@@ -620,7 +609,7 @@ public class RSPView extends Composite<VerticalLayout> {
 
                             String fileName = "testGraph" + (count % 10 + 1) + ".json";
                             //Create a property graph using the test.json as a base
-                            URL url = Source.class.getClassLoader().getResource(fileName);
+                            URL url = OldPGS.class.getClassLoader().getResource(fileName);
                             FileReader fileReader = new FileReader(url.getPath());
                             PGraph pGraph3 = PGraphImpl.fromJson(fileReader);
 
@@ -629,12 +618,6 @@ public class RSPView extends Composite<VerticalLayout> {
                             ui.access((Command) () -> {
                                 moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "90px");
                                 loadEvent(nextEventWindow, pGraph3, "100%", labels, idCounter.getAndIncrement() * 1000L);
-//                                updateSnapshotGraphFromContent(snapshotGraphFunction, nodes, edges, streamView.getChildren().map(NetworkDiagram.class::cast).toList());
-//                                updateSnapshotGraphFromContent(snapshotGraphSolo, nodes, edges, streamView.getChildren().map(NetworkDiagram.class::cast).toList());
-//                                snapshotGraphFunction.diagamRedraw();
-//                                snapshotGraphFunction.diagramFit();
-//                                snapshotGraphSolo.diagamRedraw();
-//                                snapshotGraphSolo.diagramFit();
                             });
                         } catch (FileNotFoundException e1) {
                             e1.printStackTrace();
@@ -661,7 +644,7 @@ public class RSPView extends Composite<VerticalLayout> {
         resultMyDataProvider.refreshAll();
     }
 
-    private EventGraph loadEvent(HorizontalLayout eventView, PGraph pGraph, String s, String labels, long l) {
+    private InputGraph loadEvent(HorizontalLayout eventView, PGraph pGraph, String s, String labels, long l) {
         String[] ls = labels.split(";");
         Physics physics = new Physics();
         physics.setEnabled(true);
@@ -669,8 +652,8 @@ public class RSPView extends Composite<VerticalLayout> {
         Repulsion repulsion = new Repulsion();
         repulsion.setNodeDistance(1000);
         physics.setRepulsion(repulsion);
-        final EventGraph event =
-                new EventGraph(Options.builder().withWidth(s).withHeight(s)
+        final InputGraph event =
+                new InputGraph(Options.builder().withWidth(s).withHeight(s)
                         .withAutoResize(true)
 //                        .withLayout(layout)
                         .withPhysics(physics)
@@ -800,38 +783,11 @@ public class RSPView extends Composite<VerticalLayout> {
     }
 
 
-    private void updateSnapshotGraphFromContent(NetworkDiagram snapshotGraph, List<Node> nodes, List<Edge> edges, ContentPGraph cpg) {
+    private void updateSnapshotGraphFromContent(NetworkDiagram snapshotGraph, List<Node> nodes, List<Edge> edges, List<PGraph> elements) {
 
-
-//        List<Node> ns = Arrays.stream(pGraph.nodes()).sequential().map(n -> {
-//            Node node = new Node(n.id() + "", n.labels()[0] + "\n" + n.id());
-//            if ("Station".equals(n.labels()[0])) {
-//                node.setColor("red");
-//            }
-//            return node;
-//        }).toList();
-//
-//        List<Edge> edges1 = Arrays.stream(pGraph.edges()).map(e -> {
-//                    Edge edge = new Edge(e.from() + "", e.to() + "");
-//                    edge.setLabel(e.labels()[0] + "\n" +
-//                                  "user_id:" + e.property("user_id") + "\n" +
-//                                  "val_time:" + e.property("val_time") + "\n" + "");
-//
-//                    return edge;
-//                })
-//                .map(edge -> {
-//                    if (edge.getLabel().contains("returnedAt")) {
-//                        edge.setColor("orange");
-//                    }
-//                    Arrows arrowsObject = new Arrows(new ArrowHead());
-//                    edge.setArrows(arrowsObject);
-//                    return edge;
-//                }).toList();
-//
         nodes.clear();
         edges.clear();
 
-        List<PGraph> elements = cpg.getElements();
         elements
                 .stream().flatMap(pGraph -> {
                     Stream<PGraph.Node> stream = Arrays.stream(pGraph.nodes());
@@ -971,8 +927,8 @@ public class RSPView extends Composite<VerticalLayout> {
 
         Physics physics = new Physics();
         physics.setEnabled(false);
-        final EventGraph event =
-                new EventGraph(Options.builder().withWidth(size).withHeight(size)
+        final InputGraph event =
+                new InputGraph(Options.builder().withWidth(size).withHeight(size)
                         .withAutoResize(true)
 //                        .withLayout(layout)
 //                        .withPhysics(physics)
@@ -1022,19 +978,6 @@ public class RSPView extends Composite<VerticalLayout> {
 
 
     }
-
-    private void print() {
-        seraphService.print();
-    }
-
-    private void setGridSampleData(Grid grid) {
-        grid.setItems(query -> samplePersonService.list(
-                        PageRequest.of(query.getPage(), 10, VaadinSpringDataHelpers.toSpringDataSort(query)))
-                .stream().limit(10));
-    }
-
-    @Autowired()
-    private TATableService samplePersonService;
 
     @Autowired()
     private SeraphService seraphService;

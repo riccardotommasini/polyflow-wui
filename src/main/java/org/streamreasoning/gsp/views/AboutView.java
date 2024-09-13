@@ -1,6 +1,5 @@
-package org.streamreasoning.gsp.views.about;
+package org.streamreasoning.gsp.views;
 
-import org.streamreasoning.gsp.views.MainLayout;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Image;
 import com.vaadin.flow.component.html.Paragraph;

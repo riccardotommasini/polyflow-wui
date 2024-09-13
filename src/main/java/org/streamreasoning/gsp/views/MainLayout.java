@@ -1,7 +1,5 @@
 package org.streamreasoning.gsp.views;
 
-import org.streamreasoning.gsp.views.about.AboutView;
-import org.streamreasoning.gsp.views.rsp.RSPView;
 import com.vaadin.flow.component.applayout.AppLayout;
 import com.vaadin.flow.component.applayout.DrawerToggle;
 import com.vaadin.flow.component.html.Footer;
@@ -51,8 +49,9 @@ public class MainLayout extends AppLayout {
     private SideNav createNavigation() {
         SideNav nav = new SideNav();
 
-        nav.addItem(new SideNavItem("RSP", RSPView.class, LineAwesomeIcon.PENCIL_RULER_SOLID.create()));
+        nav.addItem(new SideNavItem("RSP", OldPGS.class, LineAwesomeIcon.PENCIL_RULER_SOLID.create()));
         nav.addItem(new SideNavItem("About", AboutView.class, LineAwesomeIcon.FILE.create()));
+        nav.addItem(new SideNavItem("PGS", PGS.class, LineAwesomeIcon.ADDRESS_BOOK.create()));
 
         return nav;
     }
