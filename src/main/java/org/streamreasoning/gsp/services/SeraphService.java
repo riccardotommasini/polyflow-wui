@@ -1,19 +1,19 @@
 package org.streamreasoning.gsp.services;
 
 import com.vaadin.flow.data.provider.ListDataProvider;
+import graph.ContinuousQuery;
 import graph.seraph.events.PGraph;
 import graph.seraph.events.PGraphImpl;
 import graph.seraph.events.PGraphOrResult;
 import graph.seraph.events.Result;
-import graph.seraph.op.PGraphStreamGenerator;
-import graph.seraph.streams.PGStream;
-import graph.seraph.syntax.QueryFactory;
-import graph.seraph.syntax.SeraphQuery;
+import graph.seraph.streams.PGraphStreamGenerator;
+import graph.seraph.syntax.SeraphQueryFactory;
 import org.springframework.stereotype.Service;
 import org.streamreasoning.gsp.data.InputGraph;
 import org.streamreasoning.gsp.views.OldPGS;
-import org.streamreasoning.rsp4j.api.coordinators.ContinuousProgram;
-import org.streamreasoning.rsp4j.api.stream.data.DataStream;
+import org.streamreasoning.polyflow.api.processing.ContinuousProgram;
+import org.streamreasoning.polyflow.api.stream.data.DataStream;
+import org.streamreasoning.polyflow.base.processing.ContinuousProgramImpl;
 import org.vaadin.addons.visjs.network.main.Edge;
 import org.vaadin.addons.visjs.network.main.NetworkDiagram;
 import org.vaadin.addons.visjs.network.main.Node;
@@ -23,7 +23,6 @@ import org.vaadin.addons.visjs.network.options.edges.ArrowHead;
 import org.vaadin.addons.visjs.network.options.edges.Arrows;
 import org.vaadin.addons.visjs.network.options.physics.Physics;
 import org.vaadin.addons.visjs.network.options.physics.Repulsion;
-import shared.coordinators.ContinuousProgramImpl;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -43,10 +42,8 @@ public class SeraphService {
     private final AtomicInteger eventCounter = new AtomicInteger(1);
     private final ContinuousProgram<PGraph, PGraph, PGraphOrResult, Result> cp;
     private final PGraphStreamGenerator generator;
-    private final Map<String, SeraphQuery<PGraph, PGraph, PGraphOrResult, Result>> queries = new HashMap<>();
-
+    private final Map<String, ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> queries = new HashMap<>();
     private final Map<String, DataStream<PGraph>> streams = new HashMap<>();
-
 
     public SeraphService() {
         this.cp = new ContinuousProgramImpl<>();
@@ -168,22 +165,17 @@ public class SeraphService {
 
     }
 
-    public static PGraph fromJson(FileReader fileReader) {
-        return PGraphImpl.fromJson(fileReader);
-    }
-
     public String register(String seraphQL, String stream) {
-        SeraphQuery<PGraph, PGraph, PGraphOrResult, Result> q = parse(seraphQL, stream);
-        DataStream<PGraph> inputStreamColors = q.instream();
+        ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result> q = parse(seraphQL, stream);
+        DataStream<PGraph> inputStreamColors = q.instream().get(0);
         streams.put(stream, inputStreamColors);
         DataStream<Result> outStream = q.outstream();
-//        streams.put(q.id(), outStream);
         queries.put(q.id(), q);
         cp.buildTask(q.getTask(), Collections.singletonList(inputStreamColors), Collections.singletonList(outStream));
         return q.id();
     }
 
-    public List<SeraphQuery<PGraph, PGraph, PGraphOrResult, Result>> listQueries() {
+    public List<ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> listQueries() {
         return queries.values().stream().toList();
     }
 
@@ -196,7 +188,7 @@ public class SeraphService {
         return fromJson2(pGraph, s, labels);
     }
 
-    public PGraph nextEvent(String event, String stream) {
+    private PGraph nextEvent(String event, String stream) {
         eventCounter.compareAndSet(10, 1);
         URL url = SeraphService.class.getClassLoader().getResource(event + (eventCounter.getAndIncrement()) + ".json");
         try (FileReader fileReader = new FileReader(url.getPath())) {
@@ -213,28 +205,13 @@ public class SeraphService {
         }
     }
 
-
-    public void send(String stream, PGraph e) {
-        streams.computeIfPresent(stream, (s, pGraphDataStream) -> {
-            pGraphDataStream.put(e, System.currentTimeMillis());
-            return pGraphDataStream;
-        });
-    }
-
-    public PGStream register(PGStream s) {
-//        return seraph.register(s);
-        return s;
-    }
-
-
-    public SeraphQuery<PGraph, PGraph, PGraphOrResult, Result> parse(String value, String stream) {
+    private ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result> parse(String value, String stream) {
         try {
-            return QueryFactory.parse(value, stream);
+            return SeraphQueryFactory.parse(value, stream);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
-
 
     public List<String> getResultVars(String cqe) {
         return queries.get(cqe).getResultVars();
@@ -244,7 +221,7 @@ public class SeraphService {
         return queries.get(id).outstream();
     }
 
-    public static <T> Predicate<T> distinctByKey(Function<? super T, ?> keyExtractor) {
+    private <T> Predicate<T> distinctByKey(Function<? super T, ?> keyExtractor) {
         Set<Object> seen = ConcurrentHashMap.newKeySet();
         return t -> seen.add(keyExtractor.apply(t));
     }

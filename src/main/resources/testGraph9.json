@@ -20,18 +20,18 @@
       }
     },
     {
-      "id": 8,
+      "id": 9,
       "labels": [
         "Bike"
       ],
       "properties": {
-        "bike_id": 8
+        "bike_id": 9
       }
     }
   ],
   "edges": [
     {
-      "from": 8,
+      "from": 9,
       "to": 8,
       "labels": [
         "returnedAt"

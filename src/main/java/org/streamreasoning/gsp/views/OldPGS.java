@@ -54,7 +54,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @PageTitle("Seraph")
-@Route(value = "", layout = MainLayout.class)
+@Route(value = "/pgs2", layout = MainLayout.class)
 @Uses(Icon.class)
 public class OldPGS extends Composite<VerticalLayout> {
 

@@ -34,12 +34,13 @@ import de.f0rce.ace.AceEditor;
 import de.f0rce.ace.enums.AceMode;
 import de.f0rce.ace.enums.AceTheme;
 import graph.ContinuousQuery;
-import graph.seraph.events.PGraph;
-import graph.seraph.events.PGraphOrResult;
+import graph.jena.datatypes.JenaGraphOrBindings;
 import graph.seraph.events.Result;
+import org.apache.jena.graph.Graph;
+import org.apache.jena.sparql.engine.binding.Binding;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.streamreasoning.gsp.data.InputGraph;
-import org.streamreasoning.gsp.services.SeraphService;
+import org.streamreasoning.gsp.services.RSPService;
 import org.vaadin.addons.visjs.network.main.Edge;
 import org.vaadin.addons.visjs.network.main.NetworkDiagram;
 import org.vaadin.addons.visjs.network.main.Node;
@@ -60,10 +61,10 @@ import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@PageTitle("Seraph")
-@Route(value = "/pgs", layout = MainLayout.class)
+@PageTitle("RSP")
+@Route(value = "/rsp", layout = MainLayout.class)
 @Uses(Icon.class)
-public class PGS extends Composite<VerticalLayout> {
+public class RSP extends Composite<VerticalLayout> {
 
     static Random random = new Random();
     static AtomicInteger idCounter = new AtomicInteger();
@@ -72,9 +73,9 @@ public class PGS extends Composite<VerticalLayout> {
     static String inputStream = "http://stream1";
     private String labels = "Bike;Station";
     @Autowired
-    private SeraphService seraphService;
+    private RSPService service;
 
-    public PGS() {
+    public RSP() {
 
         HorizontalLayout inputRow = new HorizontalLayout();
         HorizontalLayout streamView = new HorizontalLayout();
@@ -165,10 +166,10 @@ public class PGS extends Composite<VerticalLayout> {
         outerNextEventWindow.add(select);
         outerNextEventWindow.add(nextEventWindow);
 
-        String fileName2 = "testGraph" + random.nextInt(1, 10) + ".json";
+        String fileName2 = "testGraph1.jsonld";
         //Create a property graph using the test.json as a base
 
-        InputGraph pGraph = SeraphService.fromJson2(fileName2, "90%", labels);
+        InputGraph pGraph = service.fromFile(fileName2, "90%", labels);
 
         InputGraph eventGraph = loadEvent(nextEventWindow, pGraph);
 
@@ -287,14 +288,14 @@ public class PGS extends Composite<VerticalLayout> {
                     labels = "Bike;Station";
                     inputStream = "http://stream1";
                     editor.setValue("REGISTER QUERY student_trick STARTING AT NOW {\n" + "MATCH (:Bike)-[r:rentedAt]->(s:Station),\n" + "q = (b)-[:returnedAt|rentedAt*3..]-(o:Station)\n" + "WITHIN PT1H\n" + "WITH r, s, q, relationships(q) AS rels,\n" + "[n IN nodes(q) WHERE 'Station' IN labels(n) | n.id] AS hs\n" + "WHERE ALL(e IN rels WHERE e.user_id = r.user_id AND e.\n" + "val_time > r.val_time AND e.duration < 20 )\n" + "EMIT r.user_id, s.id, r.val_time, hs\n" + "ON ENTERING EVERY PT5M }");
-                    ig = seraphService.nextEvent2("testGraph", inputStream, "100%", labels);
+                    ig = service.nextEvent2("testGraph", inputStream, "100%", labels);
                     loadEvent(nextEventWindow, ig);
                     break;
                 case "Cyber Security":
                     labels = "Router;Switch";
                     inputStream = "http://stream2";
                     editor.setValue("REGISTER QUERY watch_for_suspects STARTING AT NOW {\n" + "MATCH (c:Event)-[:OCCURRED_AT]->(l:Location)\n" + "WITHIN PT15M\n" + "WITH c, point(l) AS crime_scene\n" + "MATCH (crime:Event)<-[:PARTY_TO]-(p:Suspect)-[:NEAR_TO]->(curr:Location)\n" + "WITHIN PT15M\n" + "WITH c, crime, p, curr,\n" + "distance(point(curr), crime_scene) AS distance\n" + "WHERE distance < 3000 AND c.type=crime.type\n" + "EMIT person, curr, c.description\n" + "SNAPSHOT EVERY PT5M " + "}");
-                    ig = seraphService.nextEvent2("cyberTest1", inputStream, "100%", labels);
+                    ig = service.nextEvent2("cyberTest1", inputStream, "100%", labels);
                     loadEvent(nextEventWindow, ig);
                     break;
                 case "Network Monitoring":
@@ -311,14 +312,14 @@ public class PGS extends Composite<VerticalLayout> {
                                     "SNAPSHOT EVERY PT1M " +
                                     "}" +
                                     "");
-                    ig = seraphService.nextEvent2("cyberTest1", inputStream, "100%", labels);
+                    ig = service.nextEvent2("cyberTest1", inputStream, "100%", labels);
                     loadEvent(nextEventWindow, ig);
                     break;
                 case "Basic":
                     labels = "Bike;Station";
                     inputStream = "http://stream1";
                     editor.setValue("REGISTER QUERY <student_trick> STARTING AT NOW {\n" + "MATCH (b:Bike)-[r]->(s:Station)\n" + "WITHIN PT10S\n" + "EMIT b.bike_id as source, type(r) as edge, s.station_id as dest\n" + "ON ENTERING\n" + "EVERY PT5S\n" + "}");
-                    ig = seraphService.nextEvent2("testGraph", inputStream, "100%", labels);
+                    ig = service.nextEvent2("testGraph", inputStream, "100%", labels);
                     loadEvent(nextEventWindow, ig);
                     break;
                 case "New Stream":
@@ -556,19 +557,19 @@ public class PGS extends Composite<VerticalLayout> {
 
     private void addRegisteredQueries(TabSheet queryingTab, VerticalLayout outputRow) {
 
-        Grid<ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> g = new Grid();
-        List<ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> items = new ArrayList<>();
+        Grid<ContinuousQuery<Graph, Graph, JenaGraphOrBindings, Binding>> g = new Grid();
+        List<ContinuousQuery<Graph, Graph, JenaGraphOrBindings, Binding>> items = new ArrayList<>();
 
         g.setSelectionMode(Grid.SelectionMode.SINGLE);
 
-        MyDataProvider<ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> mapDP = new MyDataProvider<>(items);
+        MyDataProvider<ContinuousQuery<Graph, Graph, JenaGraphOrBindings, Binding>> mapDP = new MyDataProvider<>(items);
         g.setDataProvider(mapDP);
 //                    g.addColumn(map -> ts).setHeader("Id");
         g.setId("Registered Queries");
 
-        g.addColumn(map -> map.id()).setHeader("QID");
+        g.addColumn(ContinuousQuery<Graph, Graph, JenaGraphOrBindings, Binding>::id).setHeader("QID");
         g.addColumn(map -> map.getResultVars()).setHeader("Projections");
-        g.addComponentColumn((ValueProvider<ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>, Component>) seraphQuery -> {
+        g.addComponentColumn((ValueProvider<ContinuousQuery<Graph, Graph, JenaGraphOrBindings, Binding>, Component>) seraphQuery -> {
             Button removeQuery = new Button();
             removeQuery.setText("X");
             removeQuery.addClassName("special");
@@ -579,7 +580,7 @@ public class PGS extends Composite<VerticalLayout> {
             Registration r = removeQuery.addClickListener((ComponentEventListener<ClickEvent<Button>>) click -> {
                 String id = seraphQuery.id();
                 Notification.show(id);
-                seraphService.unregisterQuery(id);
+                service.unregisterQuery(id);
                 items.remove(seraphQuery);
                 mapDP.refreshAll();
                 outputRow.getChildren().filter(c -> id.equals(c.getId().get())).findFirst().ifPresent(Component::removeFromParent);
@@ -599,9 +600,9 @@ public class PGS extends Composite<VerticalLayout> {
 
         queryingTab.addSelectedChangeListener((ComponentEventListener<TabSheet.SelectedChangeEvent>) event -> {
             if (event.getSelectedTab().equals(queries)) {
-                if (seraphService != null) {
+                if (service != null) {
                     items.clear();
-                    items.addAll(seraphService.listQueries());
+                    items.addAll(service.listQueries());
                     mapDP.refreshAll();
                 }
             }
@@ -622,7 +623,7 @@ public class PGS extends Composite<VerticalLayout> {
 
         sendQuery.addClickListener(e -> {
 
-            String cqe = seraphService.register(editor.getValue(), inputStream);
+            String cqe = service.register(editor.getValue(), inputStream);
 
             HorizontalLayout outputRow = new HorizontalLayout();
             String id = cqe; //TODO nel task
@@ -641,7 +642,7 @@ public class PGS extends Composite<VerticalLayout> {
             lastTAT.setDataProvider(resultDataProvider);
             nowgrid.setDataProvider(resultDataProvider);
 
-            seraphService.getResultVars(id).forEach(k -> {
+            service.getResultVars(id).forEach(k -> {
                 lastTAT.addColumn(map -> map.get(k)).setHeader(k);
                 nowgrid.addColumn(map -> map.get(k)).setHeader(k);
             });
@@ -660,7 +661,10 @@ public class PGS extends Composite<VerticalLayout> {
             lastTAT.addColumn(map -> map.get("win_end")).setHeader("win_end");
             nowgrid.addColumn(map -> map.get("win_end")).setHeader("win_end");
 
-            seraphService.outstream(id).addConsumer((out, result, ts) -> {
+            service.outstream(id).addConsumer((out, binding, ts) -> {
+
+                Result result = new Result(toMap(binding));
+
                 result.put("Id", idCounter.getAndIncrement());
 
                 lastTAT.getColumnByKey("empty").setVisible(false);
@@ -672,8 +676,8 @@ public class PGS extends Composite<VerticalLayout> {
                 //TODO add focus based on selected query
                 appendResultTable(id, outputRow, result, ts, res);
 
-                seraphService.updateSnapshotGraphFromContent(snapshotGraphFunction, nodes, edges, cqe);
-                seraphService.updateSnapshotGraphFromContent(snapshotGraphSolo, nodes, edges, cqe);
+                service.updateSnapshotGraphFromContent(snapshotGraphFunction, nodes, edges, cqe);
+                service.updateSnapshotGraphFromContent(snapshotGraphSolo, nodes, edges, cqe);
                 timePicker1.setValue(LocalTime.ofInstant(Instant.ofEpochMilli(ts), ZoneId.systemDefault()));
                 System.out.println(result);
             });
@@ -681,6 +685,15 @@ public class PGS extends Composite<VerticalLayout> {
             Notification.show("Query " + cqe + " Was successfully registered");
         });
         return sendQuery;
+    }
+
+    private Map<String, Object> toMap(Binding binding) {
+
+        Map<String, Object> map = new HashMap<>();
+        binding.varsMentioned().forEach(v ->
+                map.put(v.getVarName(), binding.get(v))
+        );
+        return map;
     }
 
     private Button ingestOneEvent(HorizontalLayout streamView, HorizontalLayout nextEventWindow, NetworkDiagram snapshotGraphFunction, NetworkDiagram snapshotGraphSolo, VerticalLayout outeroutputRow) {
@@ -694,7 +707,7 @@ public class PGS extends Composite<VerticalLayout> {
 
         nextEventButton.addClickListener(e -> {
 
-            List<ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> seraphQueries = seraphService.listQueries();
+            List<ContinuousQuery<Graph, Graph, JenaGraphOrBindings, Binding>> seraphQueries = service.listQueries();
 
             if (seraphQueries.isEmpty()) {
                 Notification.show("Register a query first!", 1000, Notification.Position.MIDDLE);
@@ -705,7 +718,7 @@ public class PGS extends Composite<VerticalLayout> {
 
             moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
 
-            InputGraph pg = seraphService.nextEvent2("testGraph", inputStream, "100%", labels);
+            InputGraph pg = service.nextEvent2("testGraph", inputStream, "100%", labels);
             loadEvent(nextEventWindow, pg);
 
             Notification.show("testGraph", 500, Notification.Position.BOTTOM_CENTER);
@@ -747,7 +760,7 @@ public class PGS extends Composite<VerticalLayout> {
                     int count = 0;
                     while (!paused) {
                         try {
-                            InputGraph pGraph3 = seraphService.nextEvent2("testGraph", inputStream, "100%", labels);
+                            InputGraph pGraph3 = service.nextEvent2("testGraph", inputStream, "100%", labels);
 
                             ui.access((Command) () -> {
                                 moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
