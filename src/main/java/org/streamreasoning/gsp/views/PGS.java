@@ -40,7 +40,6 @@ import graph.seraph.syntax.SeraphQuery;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.streamreasoning.gsp.data.InputGraph;
 import org.streamreasoning.gsp.services.SeraphService;
-import org.streamreasoning.rsp4j.api.stream.data.DataStream;
 import org.vaadin.addons.visjs.network.main.Edge;
 import org.vaadin.addons.visjs.network.main.NetworkDiagram;
 import org.vaadin.addons.visjs.network.main.Node;
@@ -59,11 +58,7 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.stream.Stream;
 
 @PageTitle("Seraph")
 @Route(value = "/pgs", layout = MainLayout.class)
@@ -172,7 +167,10 @@ public class PGS extends Composite<VerticalLayout> {
 
         String fileName2 = "testGraph" + random.nextInt(1, 10) + ".json";
         //Create a property graph using the test.json as a base
-        InputGraph eventGraph = loadEvent(nextEventWindow, fileName2, "90%", labels, idCounter.getAndIncrement() * 1000L);
+
+        InputGraph pGraph = SeraphService.fromJson2(fileName2, "90%", labels);
+
+        InputGraph eventGraph = loadEvent(nextEventWindow, pGraph);
 
         processingTabSheet.add(new Tab("Next Event"), outerNextEventWindow);
 
@@ -281,6 +279,7 @@ public class PGS extends Composite<VerticalLayout> {
 
         select.addValueChangeListener(event -> {
             Notification.show(event.getValue());
+            InputGraph ig;
             moveEvent(nextEventWindow, trash, 0, "#f0f0f0", "120px");
             trash.removeAll();
             switch (event.getValue()) {
@@ -288,36 +287,39 @@ public class PGS extends Composite<VerticalLayout> {
                     labels = "Bike;Station";
                     inputStream = "http://stream1";
                     editor.setValue("REGISTER QUERY student_trick STARTING AT NOW {\n" + "MATCH (:Bike)-[r:rentedAt]->(s:Station),\n" + "q = (b)-[:returnedAt|rentedAt*3..]-(o:Station)\n" + "WITHIN PT1H\n" + "WITH r, s, q, relationships(q) AS rels,\n" + "[n IN nodes(q) WHERE 'Station' IN labels(n) | n.id] AS hs\n" + "WHERE ALL(e IN rels WHERE e.user_id = r.user_id AND e.\n" + "val_time > r.val_time AND e.duration < 20 )\n" + "EMIT r.user_id, s.id, r.val_time, hs\n" + "ON ENTERING EVERY PT5M }");
-                    loadEvent(nextEventWindow, inputStream, "100%", labels, idCounter.getAndIncrement() * 1000L);
+                    ig = seraphService.nextEvent2("testGraph", inputStream, "100%", labels);
+                    loadEvent(nextEventWindow, ig);
                     break;
                 case "Cyber Security":
                     labels = "Router;Switch";
                     inputStream = "http://stream2";
                     editor.setValue("REGISTER QUERY watch_for_suspects STARTING AT NOW {\n" + "MATCH (c:Event)-[:OCCURRED_AT]->(l:Location)\n" + "WITHIN PT15M\n" + "WITH c, point(l) AS crime_scene\n" + "MATCH (crime:Event)<-[:PARTY_TO]-(p:Suspect)-[:NEAR_TO]->(curr:Location)\n" + "WITHIN PT15M\n" + "WITH c, crime, p, curr,\n" + "distance(point(curr), crime_scene) AS distance\n" + "WHERE distance < 3000 AND c.type=crime.type\n" + "EMIT person, curr, c.description\n" + "SNAPSHOT EVERY PT5M " + "}");
-                    loadEvent(nextEventWindow, inputStream, "100%", labels, idCounter.getAndIncrement() * 1000L);
+                    ig = seraphService.nextEvent2("cyberTest1", inputStream, "100%", labels);
+                    loadEvent(nextEventWindow, ig);
                     break;
-//                case "Network Monitoring":
-//                    labels = "Event:Person";
-//                    inputStream = "http://stream3";
-//                    editor.setValue("" +
-//                                    "REGISTER QUERY anomalous_routes STARTING AT NOW {\n" +
-//                                    "MATCH path = allShortestPaths(\n" +
-//                                    "(rack:Rack)-[:HOLDS|ROUTES|CONNECTS*]-(r:Router:Egress))\n" +
-//                                    "WITHIN PT10M\n" +
-//                                    "WITH rack, avg(length(path)) as 10minAvg, path\n" +
-//                                    "WHERE (10minAvg - 5 / 0.5) >= 3\n" +
-//                                    "EMIT path\n" +
-//                                    "SNAPSHOT EVERY PT1M " +
-//                                    "}" +
-//                                    "");
-//                    pg = seraphService.nextEvent("networkTest1", inputStream);
-//                    loadEvent(nextEventWindow, pg, "100%", labels, idCounter.getAndIncrement() * 1000L);
-//                    break;
+                case "Network Monitoring":
+                    labels = "Event:Person";
+                    inputStream = "http://stream3";
+                    editor.setValue("" +
+                                    "REGISTER QUERY anomalous_routes STARTING AT NOW {\n" +
+                                    "MATCH path = allShortestPaths(\n" +
+                                    "(rack:Rack)-[:HOLDS|ROUTES|CONNECTS*]-(r:Router:Egress))\n" +
+                                    "WITHIN PT10M\n" +
+                                    "WITH rack, avg(length(path)) as 10minAvg, path\n" +
+                                    "WHERE (10minAvg - 5 / 0.5) >= 3\n" +
+                                    "EMIT path\n" +
+                                    "SNAPSHOT EVERY PT1M " +
+                                    "}" +
+                                    "");
+                    ig = seraphService.nextEvent2("cyberTest1", inputStream, "100%", labels);
+                    loadEvent(nextEventWindow, ig);
+                    break;
                 case "Basic":
                     labels = "Bike;Station";
                     inputStream = "http://stream1";
                     editor.setValue("REGISTER QUERY <student_trick> STARTING AT NOW {\n" + "MATCH (b:Bike)-[r]->(s:Station)\n" + "WITHIN PT10S\n" + "EMIT b.bike_id as source, type(r) as edge, s.station_id as dest\n" + "ON ENTERING\n" + "EVERY PT5S\n" + "}");
-                    loadEvent(nextEventWindow, inputStream, "100%", labels, idCounter.getAndIncrement() * 1000L);
+                    ig = seraphService.nextEvent2("testGraph", inputStream, "100%", labels);
+                    loadEvent(nextEventWindow, ig);
                     break;
                 case "New Stream":
                     if (popup.isOpened()) {
@@ -484,11 +486,6 @@ public class PGS extends Composite<VerticalLayout> {
 
     }
 
-    public static <T> Predicate<T> distinctByKey(Function<? super T, ?> keyExtractor) {
-        Set<Object> seen = ConcurrentHashMap.newKeySet();
-        return t -> seen.add(keyExtractor.apply(t));
-    }
-
     public static void setUpAce(AceEditor ace) {
 
 //
@@ -623,13 +620,12 @@ public class PGS extends Composite<VerticalLayout> {
         sendQuery.setWidth("min-content");
         sendQuery.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
 
-
         sendQuery.addClickListener(e -> {
 
-            SeraphQuery<PGraph, PGraph, PGraphOrResult, Result> cqe = seraphService.register(editor.getValue(), inputStream);
+            String cqe = seraphService.register(editor.getValue(), inputStream);
 
             HorizontalLayout outputRow = new HorizontalLayout();
-            String id = cqe.id(); //TODO nel task
+            String id = cqe; //TODO nel task
             outputRow.setId(id);
             outputRow.addClassName(Gap.MEDIUM);
             outputRow.setWidth("100%");
@@ -645,7 +641,7 @@ public class PGS extends Composite<VerticalLayout> {
             lastTAT.setDataProvider(resultDataProvider);
             nowgrid.setDataProvider(resultDataProvider);
 
-            cqe.getResultVars().forEach(k -> {
+            seraphService.getResultVars(id).forEach(k -> {
                 lastTAT.addColumn(map -> map.get(k)).setHeader(k);
                 nowgrid.addColumn(map -> map.get(k)).setHeader(k);
             });
@@ -664,9 +660,7 @@ public class PGS extends Composite<VerticalLayout> {
             lastTAT.addColumn(map -> map.get("win_end")).setHeader("win_end");
             nowgrid.addColumn(map -> map.get("win_end")).setHeader("win_end");
 
-            DataStream<Result> outstream = cqe.outstream();
-
-            outstream.addConsumer((out, result, ts) -> {
+            seraphService.outstream(id).addConsumer((out, result, ts) -> {
                 result.put("Id", idCounter.getAndIncrement());
 
                 lastTAT.getColumnByKey("empty").setVisible(false);
@@ -678,14 +672,13 @@ public class PGS extends Composite<VerticalLayout> {
                 //TODO add focus based on selected query
                 appendResultTable(id, outputRow, result, ts, res);
 
-                List<PGraph> list = cqe.getTask().getSDS().toStream().map(PGraphOrResult::getContent).toList();
-                updateSnapshotGraphFromContent(snapshotGraphFunction, nodes, edges, list);
-                updateSnapshotGraphFromContent(snapshotGraphSolo, nodes, edges, list);
+                seraphService.updateSnapshotGraphFromContent(snapshotGraphFunction, nodes, edges, cqe);
+                seraphService.updateSnapshotGraphFromContent(snapshotGraphSolo, nodes, edges, cqe);
                 timePicker1.setValue(LocalTime.ofInstant(Instant.ofEpochMilli(ts), ZoneId.systemDefault()));
                 System.out.println(result);
             });
 
-            Notification.show("Query " + cqe.id() + " Was successfully registered");
+            Notification.show("Query " + cqe + " Was successfully registered");
         });
         return sendQuery;
     }
@@ -708,16 +701,14 @@ public class PGS extends Composite<VerticalLayout> {
                 return;
             }
 
-            eventCounter.compareAndSet(11, 0);
-
-            String fileName = "testGraph" + (eventCounter.getAndIncrement() + 1) + ".json";
+            eventCounter.compareAndSet(10, 0);
 
             moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
 
+            InputGraph pg = seraphService.nextEvent2("testGraph", inputStream, "100%", labels);
+            loadEvent(nextEventWindow, pg);
 
-            loadEvent(nextEventWindow, fileName, "100%", labels, idCounter.getAndIncrement() * 1000L);
-
-            Notification.show(fileName, 500, Notification.Position.BOTTOM_CENTER);
+            Notification.show("testGraph", 500, Notification.Position.BOTTOM_CENTER);
 
             seraphQueries.forEach(q -> {
 
@@ -756,14 +747,11 @@ public class PGS extends Composite<VerticalLayout> {
                     int count = 0;
                     while (!paused) {
                         try {
-                            String fileName = "testGraph" + (count % 10 + 1) + ".json";
-                            //Create a property graph using the test.json as a base
-
-                            seraphService.send(inputStream, SeraphService.fromJson(fileName));
+                            InputGraph pGraph3 = seraphService.nextEvent2("testGraph", inputStream, "100%", labels);
 
                             ui.access((Command) () -> {
                                 moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
-                                loadEvent(nextEventWindow, fileName, "100%", labels, idCounter.getAndIncrement() * 1000L);
+                                loadEvent(nextEventWindow, pGraph3);
                             });
 
                             Thread.sleep(1000);
@@ -782,119 +770,40 @@ public class PGS extends Composite<VerticalLayout> {
         return realTimeButton;
     }
 
-    private InputGraph loadEvent(HorizontalLayout eventView, String fileGraph, String percentage, String labels, long l) {
-        PGraph pGraph = SeraphService.fromJson(fileGraph);
-        String[] ls = labels.split(";");
+    private InputGraph loadEvent(HorizontalLayout eventView, InputGraph event) {
         Physics physics = new Physics();
         physics.setEnabled(true);
-        Stabilization stabilization = new Stabilization();
-        stabilization.setIterations(10000);
-        physics.setStabilization(stabilization);
         physics.setSolver(Physics.Solver.repulsion);
         Repulsion repulsion = new Repulsion();
         repulsion.setNodeDistance(1000);
         physics.setRepulsion(repulsion);
-        final InputGraph event = new InputGraph(Options.builder().withWidth(percentage).withHeight(percentage).withAutoResize(true)
-//                        .withLayout(layout)
-                .withPhysics(physics).withInteraction(Interaction.builder().withMultiselect(true).build()).build(), pGraph.timestamp());
-
-        List<Node> ns = Arrays.stream(pGraph.nodes()).sequential().map(n -> {
-            Node node = new Node(n.id() + "", n.labels()[0] + "\n" + n.id());
-            if ("Station".equals(n.labels()[0])) {
-                node.setColor("red");
-            }
-            return node;
-        }).toList();
-
-        List<Edge> edges1 = Arrays.stream(pGraph.edges()).map(e -> {
-            Edge edge = new Edge(e.from() + "", e.to() + "");
-            edge.setLabel(e.labels()[0] + "\n" + "user_id:" + e.property("user_id") + "\n" + "val_time:" + e.property("val_time") + "\n");
-
-            return edge;
-        }).map(edge -> {
-            if (edge.getLabel().contains("returnedAt")) {
-                edge.setColor("orange");
-            }
-            Arrows arrowsObject = new Arrows(new ArrowHead());
-            edge.setArrows(arrowsObject);
-            return edge;
-        }).toList();
-
-
-        LinkedList<Node> nodes = new LinkedList<>(ns);
-        final var dataProvider = new ListDataProvider<Node>(nodes);
-        LinkedList<Edge> edges = new LinkedList<>(edges1);
-        final var edgeProvider = new ListDataProvider<Edge>(edges);
-
-        event.setNodesDataProvider(dataProvider);
-        event.setEdgesDataProvider(edgeProvider);
         eventView.add(event);
         event.diagramFit();
         event.diagamRedraw();
-
         return event;
     }
 
     private void appendResultTable(String qid, HorizontalLayout outputRow, Result arg, long ts, List<Result> res) {
-        System.out.println(qid);
-        outputRow.getChildren().filter(component -> !(component instanceof H4)).map(obj -> (Grid) obj).filter(grid -> grid.getId().filter(id -> id.equals(ts + "")).isPresent()).findFirst().or(() -> {
-            Grid<Result> g = new Grid();
-            List<Result> items = new ArrayList<>();
-            MyDataProvider<Result> mapDP = new MyDataProvider<>(items);
-            g.setDataProvider(mapDP);
-//                    g.addColumn(map -> ts).setHeader("Id")    ;
-            g.setId(ts + "");
+        outputRow.getChildren().filter(component -> !(component instanceof H4)).map(obj -> (Grid) obj).filter(grid -> grid.getId().filter(id -> id.equals(ts + "")).isPresent())
+                .findFirst().or(() -> {
+                    Grid<Result> g = new Grid();
+                    List<Result> items = new ArrayList<>();
+                    MyDataProvider<Result> mapDP = new MyDataProvider<>(items);
+                    g.setDataProvider(mapDP);
+                    g.setId(ts + "");
 
-            arg.keySet().forEach(k -> {
-                g.addColumn(map -> map.get(k)).setHeader(k);
-            });
+                    arg.keySet().forEach(k -> g.addColumn(map -> map.get(k)).setHeader(k));
 
-            res.clear();
+                    res.clear();
 
-            g.addThemeVariants(GridVariant.LUMO_COLUMN_BORDERS);
-            g.addThemeVariants(GridVariant.LUMO_ROW_STRIPES);
-            g.setWidth("100%");
-            g.setHeight("100%");
-            g.setPageSize(10);
-            outputRow.add(g);
-            return Optional.of(g);
-        }).ifPresent(g -> ((ListDataProvider) g.getDataProvider()).getItems().add(arg));
-
-    }
-
-    private void updateSnapshotGraphFromContent(NetworkDiagram snapshotGraph, List<Node> nodes, List<Edge> edges, List<PGraph> elements) {
-
-        nodes.clear();
-        edges.clear();
-
-        elements.stream().flatMap(pGraph -> {
-            Stream<PGraph.Node> stream = Arrays.stream(pGraph.nodes());
-            return stream;
-        }).map(n -> {
-            Node node = new Node(n.id() + "", n.labels()[0] + "\n" + n.id());
-            if ("Station".equals(n.labels()[0])) {
-                node.setColor("red");
-            }
-            return node;
-        }).filter(distinctByKey(Node::getId)).forEach(nodes::add);
-
-        elements.stream().flatMap(pGraph -> Arrays.stream(pGraph.edges())).map(e -> {
-            Edge edge = new Edge(e.from() + "", e.to() + "");
-            edge.setLabel(e.labels()[0] + "\n" + "user_id:" + e.property("user_id") + "\n" + "val_time:" + e.property("val_time") + "\n");
-
-            return edge;
-        }).map(edge -> {
-            if (edge.getLabel().contains("returnedAt")) {
-                edge.setColor("orange");
-            }
-            Arrows arrowsObject = new Arrows(new ArrowHead());
-            edge.setArrows(arrowsObject);
-            return edge;
-        }).forEach(edges::add);
-
-        snapshotGraph.getEdgesDataProvider().refreshAll();
-        snapshotGraph.getNodesDataProvider().refreshAll();
-
+                    g.addThemeVariants(GridVariant.LUMO_COLUMN_BORDERS);
+                    g.addThemeVariants(GridVariant.LUMO_ROW_STRIPES);
+                    g.setWidth("100%");
+                    g.setHeight("100%");
+                    g.setPageSize(10);
+                    outputRow.add(g);
+                    return Optional.of(g);
+                }).ifPresent(g -> ((ListDataProvider) g.getDataProvider()).getItems().add(arg));
     }
 
     public class MyDataProvider<T> extends ListDataProvider<T> {
