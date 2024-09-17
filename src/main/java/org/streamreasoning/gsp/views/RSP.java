@@ -287,7 +287,12 @@ public class RSP extends Composite<VerticalLayout> {
                 case "Bike Sharing":
                     labels = "Bike;Station";
                     inputStream = "http://stream1";
-                    editor.setValue("REGISTER QUERY student_trick STARTING AT NOW {\n" + "MATCH (:Bike)-[r:rentedAt]->(s:Station),\n" + "q = (b)-[:returnedAt|rentedAt*3..]-(o:Station)\n" + "WITHIN PT1H\n" + "WITH r, s, q, relationships(q) AS rels,\n" + "[n IN nodes(q) WHERE 'Station' IN labels(n) | n.id] AS hs\n" + "WHERE ALL(e IN rels WHERE e.user_id = r.user_id AND e.\n" + "val_time > r.val_time AND e.duration < 20 )\n" + "EMIT r.user_id, s.id, r.val_time, hs\n" + "ON ENTERING EVERY PT5M }");
+                    editor.setValue("REGISTER ISTREAM <http://out/stream> AS\n" +
+                                    "SELECT *\n" +
+                                    "FROM NAMED WINDOW < window1 > ON <http://stream1> [RANGE PT10S STEP PT5S]\n" +
+                                    "WHERE {\n" +
+                                    "     WINDOW ?w { ?a ?b ?c } .\n" +
+                                    "}");
                     ig = service.nextEvent2("testGraph", inputStream, "100%", labels);
                     loadEvent(nextEventWindow, ig);
                     break;
@@ -757,12 +762,10 @@ public class RSP extends Composite<VerticalLayout> {
             paused = !paused;
             getUI().ifPresent(ui -> {
                 new Thread(() -> {
-                    int count = 0;
                     while (!paused) {
                         try {
-                            InputGraph pGraph3 = service.nextEvent2("testGraph", inputStream, "100%", labels);
-
                             ui.access((Command) () -> {
+                                InputGraph pGraph3 = service.nextEvent2("testGraph", inputStream, "100%", labels);
                                 moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
                                 loadEvent(nextEventWindow, pGraph3);
                             });
@@ -771,7 +774,6 @@ public class RSP extends Composite<VerticalLayout> {
                         } catch (InterruptedException ex) {
                             throw new RuntimeException(ex);
                         }
-                        count++;
                     }
                 }).start();
                 Notification.show("Real Time Processing Started");
@@ -796,7 +798,7 @@ public class RSP extends Composite<VerticalLayout> {
         return event;
     }
 
-    private void appendResultTable(String qid, HorizontalLayout outputRow, Result arg, long ts, List<Result> res) {
+    private synchronized void appendResultTable(String qid, HorizontalLayout outputRow, Result arg, long ts, List<Result> res) {
         outputRow.getChildren().filter(component -> !(component instanceof H4)).map(obj -> (Grid) obj).filter(grid -> grid.getId().filter(id -> id.equals(ts + "")).isPresent())
                 .findFirst().or(() -> {
                     Grid<Result> g = new Grid();

@@ -1,6 +1,18 @@
 package org.streamreasoning.gsp.services;
 
+import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.grid.GridVariant;
+import com.vaadin.flow.component.html.H4;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.tabs.Tab;
+import com.vaadin.flow.component.tabs.TabSheet;
+import com.vaadin.flow.component.timepicker.TimePicker;
 import com.vaadin.flow.data.provider.ListDataProvider;
+import com.vaadin.flow.theme.lumo.LumoUtility;
+import de.f0rce.ace.AceEditor;
 import graph.ContinuousQuery;
 import graph.seraph.events.PGraph;
 import graph.seraph.events.PGraphImpl;
@@ -28,6 +40,9 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.net.URL;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -40,10 +55,12 @@ import java.util.stream.Stream;
 public class SeraphService {
 
     private final AtomicInteger eventCounter = new AtomicInteger(1);
+    private final AtomicInteger idCounter = new AtomicInteger(1);
     private final ContinuousProgram<PGraph, PGraph, PGraphOrResult, Result> cp;
     private final PGraphStreamGenerator generator;
     private final Map<String, ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> queries = new HashMap<>();
     private final Map<String, DataStream<PGraph>> streams = new HashMap<>();
+    private Tab lastTATTab = new Tab("Last Time-Annotated Table");
 
     public SeraphService() {
         this.cp = new ContinuousProgramImpl<>();
@@ -175,8 +192,8 @@ public class SeraphService {
         return q.id();
     }
 
-    public List<ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> listQueries() {
-        return queries.values().stream().toList();
+    public List<String> listQueries() {
+        return queries.values().stream().map(ContinuousQuery::id).toList();
     }
 
     public void unregisterQuery(String s) {
@@ -221,9 +238,147 @@ public class SeraphService {
         return queries.get(id).outstream();
     }
 
+//    public DataStream<OutputTable> outstream(String id) {
+//        return queries.get(id).outstream().addConsumer((dataStream, result, l) -> {
+//
+//            return;
+//
+//        });
+//    }
+
     private <T> Predicate<T> distinctByKey(Function<? super T, ?> keyExtractor) {
         Set<Object> seen = ConcurrentHashMap.newKeySet();
         return t -> seen.add(keyExtractor.apply(t));
     }
 
+    public void appendResultTable(HorizontalLayout outputRow, Result arg, long ts, List<Result> res) {
+        outputRow.getChildren()
+                .filter(component -> !(component instanceof H4))
+                .map(obj -> (Grid) obj)
+                .filter(grid -> grid.getId().filter(id -> id.equals(ts + ""))
+                        .isPresent())
+                .findFirst().or(() -> {
+                    Grid<Result> g = new Grid(Result.class);
+                    List<Result> items = new ArrayList<>();
+                    MyDataProvider<Result> mapDP = new MyDataProvider<>(items);
+                    g.setDataProvider(mapDP);
+                    g.setId(ts + "");
+
+                    //This part depends on query output
+                    arg.keySet().forEach(k -> g.addColumn(map -> map.get(k)).setHeader(k));
+
+                    res.clear();
+
+                    g.addThemeVariants(GridVariant.LUMO_COLUMN_BORDERS);
+                    g.addThemeVariants(GridVariant.LUMO_ROW_STRIPES);
+                    g.setWidth("100%");
+                    g.setHeight("100%");
+                    g.setPageSize(10);
+                    outputRow.add(g);
+                    return Optional.of(g);
+                }).ifPresent(g -> ((ListDataProvider) g.getDataProvider()).getItems().add(arg));
+    }
+
+    public void registerNewQuery(String inputStream, List<Node> nodes, List<Edge> edges, NetworkDiagram snapshotGraphFunction, NetworkDiagram snapshotGraphSolo, Grid<?> nowgrid2, HorizontalLayout tvttab, TimePicker timePicker1, TabSheet processingTabSheet, AceEditor editor, VerticalLayout outputRowContainer) {
+
+        //todo if processingTabSheet contains already, ti should not recreate it.
+        Grid<Result> lastTAT;
+        Component component = processingTabSheet.getComponent(lastTATTab);
+        if (component == null) {
+            processingTabSheet.add(lastTATTab, lastTAT = new Grid<>(Result.class));
+            lastTAT.setId("lastTAT");
+            lastTAT.setWidth("100%");
+            lastTAT.setHeight("100%");
+            lastTAT.setPageSize(10);
+            lastTAT.getStyle().setFontSize("1em");
+        } else
+            lastTAT = (Grid<Result>) component;
+
+        Grid<Result> nowgrid;
+        tvttab.replace(tvttab.getChildren().toList().get(2), nowgrid = new Grid<>(Result.class));
+
+        nowgrid.setId("nowgrid");
+        nowgrid.setWidth("100%");
+        nowgrid.setHeight("100%");
+        nowgrid.setPageSize(10);
+        nowgrid.getStyle().setFontSize("12px");
+
+        String cqe = register(editor.getValue(), inputStream);
+
+        HorizontalLayout outputRow = new HorizontalLayout();
+        String id = cqe; //TODO nel task
+        outputRow.setId(id);
+        outputRow.addClassName(LumoUtility.Gap.MEDIUM);
+        outputRow.setWidth("100%");
+        outputRow.setHeight("200px");
+
+        outputRow.add(new H4(id));
+
+        outputRowContainer.add(outputRow);
+
+        List<Result> res = new ArrayList<>();
+        ListDataProvider<Result> resultDataProvider = new SeraphService.MyDataProvider<>(res);
+
+        lastTAT.setDataProvider(resultDataProvider);
+        nowgrid.setDataProvider(resultDataProvider);
+
+        getResultVars(id).forEach(k -> {
+            lastTAT.addColumn(map -> map.get(k)).setHeader(k);
+            nowgrid.addColumn(map -> map.get(k)).setHeader(k);
+        });
+
+        lastTAT.getColumnByKey("empty").setVisible(false);
+        nowgrid.getColumnByKey("empty").setVisible(false);
+
+        lastTAT.addColumn(map -> map.get("Id")).setHeader("Id");
+        nowgrid.addColumn(map -> map.get("Id")).setHeader("Id");
+
+        lastTAT.addColumn(map -> map.get("win_start")).setHeader("win_start");
+        nowgrid.addColumn(map -> map.get("win_start")).setHeader("win_start");
+
+        lastTAT.addColumn(map -> map.get("win_end")).setHeader("win_end");
+        nowgrid.addColumn(map -> map.get("win_end")).setHeader("win_end");
+
+//        addConsumer(id, lastTAT, nowgrid, res, resultDataProvider, timePicker1, outputRow, snapshotGraphFunction, snapshotGraphSolo, nodes, edges);
+
+        outstream(id).addConsumer((out, result, ts) -> {
+            result.put("Id", idCounter.getAndIncrement());
+
+            lastTAT.getColumnByKey("empty").setVisible(false);
+            nowgrid.getColumnByKey("empty").setVisible(false);
+
+            res.add(result);
+
+            resultDataProvider.refreshAll();
+
+            //TODO add focus based on selected query
+            appendResultTable(outputRow, result, ts, res);
+
+            updateSnapshotGraphFromContent(snapshotGraphFunction, nodes, edges, cqe);
+            updateSnapshotGraphFromContent(snapshotGraphSolo, nodes, edges, cqe);
+            timePicker1.setValue(LocalTime.ofInstant(Instant.ofEpochMilli(ts), ZoneId.systemDefault()));
+            System.out.println(result);
+        });
+
+        Notification.show("Query " + cqe + " Was successfully registered");
+    }
+
+    public static class MyDataProvider<T> extends ListDataProvider<T> {
+
+        public MyDataProvider(Collection<T> items) {
+            super(items);
+        }
+
+        @Override
+        public String getId(T item) {
+            Objects.requireNonNull(item, "Cannot provide an id for a null item.");
+            if (item instanceof Map<?, ?> map) {
+                if (map.get("id") != null) return map.get("id").toString();
+                else return item.toString();
+            } else {
+                return item.toString();
+            }
+        }
+
+    }
 }

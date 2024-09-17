@@ -11,7 +11,6 @@ import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.dependency.Uses;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
-import com.vaadin.flow.component.html.H4;
 import com.vaadin.flow.component.html.Hr;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.html.Span;
@@ -33,10 +32,6 @@ import com.vaadin.flow.theme.lumo.LumoUtility.Gap;
 import de.f0rce.ace.AceEditor;
 import de.f0rce.ace.enums.AceMode;
 import de.f0rce.ace.enums.AceTheme;
-import graph.ContinuousQuery;
-import graph.seraph.events.PGraph;
-import graph.seraph.events.PGraphOrResult;
-import graph.seraph.events.Result;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.streamreasoning.gsp.data.InputGraph;
 import org.streamreasoning.gsp.services.SeraphService;
@@ -54,10 +49,11 @@ import org.vaadin.addons.visjs.network.options.physics.Repulsion;
 import org.vaadin.addons.visjs.network.options.physics.Stabilization;
 import org.vaadin.addons.visjs.network.util.Shape;
 
-import java.time.Instant;
 import java.time.LocalTime;
-import java.time.ZoneId;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @PageTitle("Seraph")
@@ -207,13 +203,6 @@ public class PGS extends Composite<VerticalLayout> {
 
         Tab now = new Tab("Time-Varying Table");
 
-
-        Grid<Result> nowgrid = new Grid<>(Result.class);
-        nowgrid.setWidth("100%");
-        nowgrid.setHeight("100%");
-        nowgrid.setPageSize(10);
-        nowgrid.getStyle().setFontSize("12px");
-
 //        setGridSampleData(nowgrid);
 
         HorizontalLayout tvttab = new HorizontalLayout();
@@ -231,7 +220,6 @@ public class PGS extends Composite<VerticalLayout> {
 
         verticalLayout.setAlignItems(FlexComponent.Alignment.CENTER);
         verticalLayout.setJustifyContentMode(FlexComponent.JustifyContentMode.CENTER);
-        tvttab.add(snapshotGraphFunction, verticalLayout, nowgrid);
 
         TabSheet queryingTab = new TabSheet();
         queryingTab.addSelectedChangeListener((ComponentEventListener<TabSheet.SelectedChangeEvent>) event -> {
@@ -247,18 +235,24 @@ public class PGS extends Composite<VerticalLayout> {
         // Next Temporal Table
         //Container for time varying table and datepicker
 
-        Tab lastTATTab = new Tab("Last Time-Annotated Table");
-        Grid<Result> lastTAT = new Grid<>(Result.class);
 
-        lastTAT.setWidth("100%");
-        lastTAT.setHeight("100%");
-        lastTAT.setPageSize(10);
-        lastTAT.getStyle().setFontSize("1em");
+        Grid<?> nowgrid = new Grid<>();
+        nowgrid.setId("nowgrid");
+        nowgrid.setWidth("100%");
+        nowgrid.setHeight("100%");
+        nowgrid.setPageSize(10);
+        nowgrid.getStyle().setFontSize("12px");
+
+//        Tab lastTATTab = new Tab("Last Time-Annotated Table");
+//        Grid<Result> lastTAT = new Grid<>(Result.class);
+
 //        setGridSampleData(lastTAT);
 
         processingTabSheet.add(now, tvttab);
         processingTabSheet.add(new Tab("Snapshot Graph"), snapshotGraphSolo);
-        processingTabSheet.add(lastTATTab, lastTAT);
+
+        tvttab.add(snapshotGraphFunction, verticalLayout, nowgrid);
+
 
         Tab editorTab = new Tab("Query Editor");
         AceEditor editor = new AceEditor();
@@ -294,23 +288,13 @@ public class PGS extends Composite<VerticalLayout> {
                     labels = "Router;Switch";
                     inputStream = "http://stream2";
                     editor.setValue("REGISTER QUERY watch_for_suspects STARTING AT NOW {\n" + "MATCH (c:Event)-[:OCCURRED_AT]->(l:Location)\n" + "WITHIN PT15M\n" + "WITH c, point(l) AS crime_scene\n" + "MATCH (crime:Event)<-[:PARTY_TO]-(p:Suspect)-[:NEAR_TO]->(curr:Location)\n" + "WITHIN PT15M\n" + "WITH c, crime, p, curr,\n" + "distance(point(curr), crime_scene) AS distance\n" + "WHERE distance < 3000 AND c.type=crime.type\n" + "EMIT person, curr, c.description\n" + "SNAPSHOT EVERY PT5M " + "}");
-                    ig = seraphService.nextEvent2("cyberTest1", inputStream, "100%", labels);
+                    ig = seraphService.nextEvent2("cyberTest", inputStream, "100%", labels);
                     loadEvent(nextEventWindow, ig);
                     break;
                 case "Network Monitoring":
                     labels = "Event:Person";
                     inputStream = "http://stream3";
-                    editor.setValue("" +
-                                    "REGISTER QUERY anomalous_routes STARTING AT NOW {\n" +
-                                    "MATCH path = allShortestPaths(\n" +
-                                    "(rack:Rack)-[:HOLDS|ROUTES|CONNECTS*]-(r:Router:Egress))\n" +
-                                    "WITHIN PT10M\n" +
-                                    "WITH rack, avg(length(path)) as 10minAvg, path\n" +
-                                    "WHERE (10minAvg - 5 / 0.5) >= 3\n" +
-                                    "EMIT path\n" +
-                                    "SNAPSHOT EVERY PT1M " +
-                                    "}" +
-                                    "");
+                    editor.setValue("" + "REGISTER QUERY anomalous_routes STARTING AT NOW {\n" + "MATCH path = allShortestPaths(\n" + "(rack:Rack)-[:HOLDS|ROUTES|CONNECTS*]-(r:Router:Egress))\n" + "WITHIN PT10M\n" + "WITH rack, avg(length(path)) as 10minAvg, path\n" + "WHERE (10minAvg - 5 / 0.5) >= 3\n" + "EMIT path\n" + "SNAPSHOT EVERY PT1M " + "}" + "");
                     ig = seraphService.nextEvent2("cyberTest1", inputStream, "100%", labels);
                     loadEvent(nextEventWindow, ig);
                     break;
@@ -348,7 +332,15 @@ public class PGS extends Composite<VerticalLayout> {
         HorizontalLayout rightControl = new HorizontalLayout();
         controlRow.add(leftControl, rightControl);
 
-        Button sendQuery = registerNewQuery(nodes, edges, snapshotGraphFunction, snapshotGraphSolo, nowgrid, timePicker1, lastTAT, editor, outputRow);
+        Button sendQuery = new Button();
+        sendQuery.setText("Register Query");
+        sendQuery.addClassName("special");
+        sendQuery.setHeight("90%");
+
+        sendQuery.setWidth("min-content");
+        sendQuery.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+
+        sendQuery.addClickListener(click -> seraphService.registerNewQuery(inputStream, nodes, edges, snapshotGraphFunction, snapshotGraphSolo, nowgrid, tvttab, timePicker1, processingTabSheet, editor, outputRow));
 
         Button nextEventButton = ingestOneEvent(streamView, nextEventWindow, snapshotGraphFunction, snapshotGraphSolo, outputRow);
 
@@ -556,19 +548,19 @@ public class PGS extends Composite<VerticalLayout> {
 
     private void addRegisteredQueries(TabSheet queryingTab, VerticalLayout outputRow) {
 
-        Grid<ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> g = new Grid();
-        List<ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> items = new ArrayList<>();
+        Grid<String> g = new Grid();
+        List<String> items = new ArrayList<>();
 
         g.setSelectionMode(Grid.SelectionMode.SINGLE);
 
-        MyDataProvider<ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> mapDP = new MyDataProvider<>(items);
+        ListDataProvider<String> mapDP = new SeraphService.MyDataProvider<>(items);
         g.setDataProvider(mapDP);
 //                    g.addColumn(map -> ts).setHeader("Id");
         g.setId("Registered Queries");
 
-        g.addColumn(map -> map.id()).setHeader("QID");
-        g.addColumn(map -> map.getResultVars()).setHeader("Projections");
-        g.addComponentColumn((ValueProvider<ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>, Component>) seraphQuery -> {
+        g.addColumn(map -> map).setHeader("QID");
+        g.addColumn(map -> seraphService.getResultVars(map)).setHeader("Projections");
+        g.addComponentColumn((ValueProvider<String, Component>) seraphQuery -> {
             Button removeQuery = new Button();
             removeQuery.setText("X");
             removeQuery.addClassName("special");
@@ -577,7 +569,7 @@ public class PGS extends Composite<VerticalLayout> {
             removeQuery.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_ERROR);
 
             Registration r = removeQuery.addClickListener((ComponentEventListener<ClickEvent<Button>>) click -> {
-                String id = seraphQuery.id();
+                String id = seraphQuery;
                 Notification.show(id);
                 seraphService.unregisterQuery(id);
                 items.remove(seraphQuery);
@@ -608,81 +600,6 @@ public class PGS extends Composite<VerticalLayout> {
         });
     }
 
-    private Button registerNewQuery(List<Node> nodes, List<Edge> edges, NetworkDiagram snapshotGraphFunction, NetworkDiagram snapshotGraphSolo, Grid<Result> nowgrid, TimePicker timePicker1, Grid<Result> lastTAT, AceEditor editor, VerticalLayout outputRowContainer) {
-
-        //TODO alter if a query is already registered
-
-        Button sendQuery = new Button();
-        sendQuery.setText("Register Query");
-        sendQuery.addClassName("special");
-        sendQuery.setHeight("90%");
-
-        sendQuery.setWidth("min-content");
-        sendQuery.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-
-        sendQuery.addClickListener(e -> {
-
-            String cqe = seraphService.register(editor.getValue(), inputStream);
-
-            HorizontalLayout outputRow = new HorizontalLayout();
-            String id = cqe; //TODO nel task
-            outputRow.setId(id);
-            outputRow.addClassName(Gap.MEDIUM);
-            outputRow.setWidth("100%");
-            outputRow.setHeight("200px");
-
-            outputRow.add(new H4(id));
-
-            outputRowContainer.add(outputRow);
-
-            List<Result> res = new ArrayList<>();
-            MyDataProvider<Result> resultDataProvider = new MyDataProvider<>(res);
-
-            lastTAT.setDataProvider(resultDataProvider);
-            nowgrid.setDataProvider(resultDataProvider);
-
-            seraphService.getResultVars(id).forEach(k -> {
-                lastTAT.addColumn(map -> map.get(k)).setHeader(k);
-                nowgrid.addColumn(map -> map.get(k)).setHeader(k);
-            });
-
-            lastTAT.getColumnByKey("empty").setVisible(false);
-            nowgrid.getColumnByKey("empty").setVisible(false);
-
-            lastTAT.addColumn(map -> map.get("Id")).setHeader("Id");
-            nowgrid.addColumn(map -> map.get("Id")).setHeader("Id");
-
-            List<Grid.Column<Result>> columns = lastTAT.getColumns();
-
-            lastTAT.addColumn(map -> map.get("win_start")).setHeader("win_start");
-            nowgrid.addColumn(map -> map.get("win_start")).setHeader("win_start");
-
-            lastTAT.addColumn(map -> map.get("win_end")).setHeader("win_end");
-            nowgrid.addColumn(map -> map.get("win_end")).setHeader("win_end");
-
-            seraphService.outstream(id).addConsumer((out, result, ts) -> {
-                result.put("Id", idCounter.getAndIncrement());
-
-                lastTAT.getColumnByKey("empty").setVisible(false);
-                nowgrid.getColumnByKey("empty").setVisible(false);
-
-                res.add(result);
-                resultDataProvider.refreshAll();
-
-                //TODO add focus based on selected query
-                appendResultTable(id, outputRow, result, ts, res);
-
-                seraphService.updateSnapshotGraphFromContent(snapshotGraphFunction, nodes, edges, cqe);
-                seraphService.updateSnapshotGraphFromContent(snapshotGraphSolo, nodes, edges, cqe);
-                timePicker1.setValue(LocalTime.ofInstant(Instant.ofEpochMilli(ts), ZoneId.systemDefault()));
-                System.out.println(result);
-            });
-
-            Notification.show("Query " + cqe + " Was successfully registered");
-        });
-        return sendQuery;
-    }
-
     private Button ingestOneEvent(HorizontalLayout streamView, HorizontalLayout nextEventWindow, NetworkDiagram snapshotGraphFunction, NetworkDiagram snapshotGraphSolo, VerticalLayout outeroutputRow) {
 
         Button nextEventButton = new Button();
@@ -694,7 +611,7 @@ public class PGS extends Composite<VerticalLayout> {
 
         nextEventButton.addClickListener(e -> {
 
-            List<ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> seraphQueries = seraphService.listQueries();
+            List<String> seraphQueries = seraphService.listQueries();
 
             if (seraphQueries.isEmpty()) {
                 Notification.show("Register a query first!", 1000, Notification.Position.MIDDLE);
@@ -711,9 +628,7 @@ public class PGS extends Composite<VerticalLayout> {
             Notification.show("testGraph", 500, Notification.Position.BOTTOM_CENTER);
 
             seraphQueries.forEach(q -> {
-
-                HorizontalLayout outputRow = (HorizontalLayout) outeroutputRow.getChildren().filter(c -> q.id().equals(c.getId().get())).findFirst().get();
-
+                HorizontalLayout outputRow = (HorizontalLayout) outeroutputRow.getChildren().filter(c -> q.equals(c.getId().get())).findFirst().get();
                 if (outputRow.getComponentCount() > 5) {
                     outputRow.remove(outputRow.getComponentAt(0));
                 }
@@ -744,12 +659,10 @@ public class PGS extends Composite<VerticalLayout> {
             paused = !paused;
             getUI().ifPresent(ui -> {
                 new Thread(() -> {
-                    int count = 0;
                     while (!paused) {
                         try {
-                            InputGraph pGraph3 = seraphService.nextEvent2("testGraph", inputStream, "100%", labels);
-
                             ui.access((Command) () -> {
+                                InputGraph pGraph3 = seraphService.nextEvent2("testGraph", inputStream, "100%", labels);
                                 moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
                                 loadEvent(nextEventWindow, pGraph3);
                             });
@@ -758,7 +671,6 @@ public class PGS extends Composite<VerticalLayout> {
                         } catch (InterruptedException ex) {
                             throw new RuntimeException(ex);
                         }
-                        count++;
                     }
                 }).start();
                 Notification.show("Real Time Processing Started");
@@ -781,48 +693,6 @@ public class PGS extends Composite<VerticalLayout> {
         event.diagramFit();
         event.diagamRedraw();
         return event;
-    }
-
-    private void appendResultTable(String qid, HorizontalLayout outputRow, Result arg, long ts, List<Result> res) {
-        outputRow.getChildren().filter(component -> !(component instanceof H4)).map(obj -> (Grid) obj).filter(grid -> grid.getId().filter(id -> id.equals(ts + "")).isPresent())
-                .findFirst().or(() -> {
-                    Grid<Result> g = new Grid();
-                    List<Result> items = new ArrayList<>();
-                    MyDataProvider<Result> mapDP = new MyDataProvider<>(items);
-                    g.setDataProvider(mapDP);
-                    g.setId(ts + "");
-
-                    arg.keySet().forEach(k -> g.addColumn(map -> map.get(k)).setHeader(k));
-
-                    res.clear();
-
-                    g.addThemeVariants(GridVariant.LUMO_COLUMN_BORDERS);
-                    g.addThemeVariants(GridVariant.LUMO_ROW_STRIPES);
-                    g.setWidth("100%");
-                    g.setHeight("100%");
-                    g.setPageSize(10);
-                    outputRow.add(g);
-                    return Optional.of(g);
-                }).ifPresent(g -> ((ListDataProvider) g.getDataProvider()).getItems().add(arg));
-    }
-
-    public class MyDataProvider<T> extends ListDataProvider<T> {
-
-        public MyDataProvider(Collection<T> items) {
-            super(items);
-        }
-
-        @Override
-        public String getId(T item) {
-            Objects.requireNonNull(item, "Cannot provide an id for a null item.");
-            if (item instanceof Map<?, ?> map) {
-                if (map.get("id") != null) return map.get("id").toString();
-                else return item.toString();
-            } else {
-                return item.toString();
-            }
-        }
-
     }
 
 }
