@@ -33,8 +33,9 @@ import de.f0rce.ace.AceEditor;
 import de.f0rce.ace.enums.AceMode;
 import de.f0rce.ace.enums.AceTheme;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.streamreasoning.gsp.data.GraphDataComponent;
+import org.streamreasoning.gsp.data.TableDataComponent;
 import org.streamreasoning.gsp.services.DataComponent;
+import org.streamreasoning.gsp.services.RelationalService;
 import org.streamreasoning.gsp.services.SeraphService;
 import org.vaadin.addons.visjs.network.main.Edge;
 import org.vaadin.addons.visjs.network.main.NetworkDiagram;
@@ -57,22 +58,21 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@PageTitle("Seraph")
-@Route(value = "/pgs", layout = MainLayout.class)
+@PageTitle("Relational")
+@Route(value = "/rel", layout = MainLayout.class)
 @Uses(Icon.class)
-public class PGS extends Composite<VerticalLayout> {
+public class Relational extends Composite<VerticalLayout> {
 
     static Random random = new Random();
-    static AtomicInteger idCounter = new AtomicInteger();
     static AtomicInteger eventCounter = new AtomicInteger();
     static boolean paused = true;
     static String inputStream = "http://stream1";
-    private String labels = "Bike;Station";
+    private final String event = "relational_stream_items";
 
     @Autowired
-    private SeraphService seraphService;
+    private RelationalService seraphService;
 
-    public PGS() {
+    public Relational() {
 
         HorizontalLayout inputRow = new HorizontalLayout();
         HorizontalLayout streamView = new HorizontalLayout();
@@ -167,9 +167,7 @@ public class PGS extends Composite<VerticalLayout> {
 
         //Snapshot Graph
 
-        List<Node> nodes = new LinkedList<>();
-        List<Edge> edges = new LinkedList<>();
-
+        List<?> nodes = new LinkedList<>();
 
         Physics physics = new Physics();
         physics.setEnabled(true);
@@ -181,13 +179,15 @@ public class PGS extends Composite<VerticalLayout> {
         repulsion.setNodeDistance(100);
         physics.setRepulsion(repulsion);
 
+        final ListDataProvider<?> dataProvider = new ListDataProvider<>(nodes);
 
-        final var dataProvider = new ListDataProvider<Node>(nodes);
-        final var edgeProvider = new ListDataProvider<Edge>(edges);
+        final TableDataComponent<?> snapshotGraphFunction = new TableDataComponent(dataProvider);
+        final TableDataComponent<?> snapshotGraphSolo = new TableDataComponent(dataProvider);
 
-        final GraphDataComponent snapshotGraphFunction = new GraphDataComponent(Options.builder().withWidth("100%").withHeight("100%").withInteraction(Interaction.builder().withMultiselect(true).build()).build(), dataProvider, edgeProvider);
-        final GraphDataComponent snapshotGraphSolo = new GraphDataComponent(Options.builder().withWidth("100%").withHeight("100%").withPhysics(physics).withInteraction(Interaction.builder().withMultiselect(true).build()).build(), dataProvider, edgeProvider);
-
+        snapshotGraphFunction.setHeight("100%");
+        snapshotGraphFunction.setWidth("100%");
+        snapshotGraphSolo.setHeight("100%");
+        snapshotGraphSolo.setWidth("100%");
 
         // Time Varying Table
         //Container for time varying table and datepicker
@@ -214,10 +214,8 @@ public class PGS extends Composite<VerticalLayout> {
 
         TabSheet queryingTab = new TabSheet();
         queryingTab.addSelectedChangeListener((ComponentEventListener<TabSheet.SelectedChangeEvent>) event -> {
-            snapshotGraphSolo.diagamRedraw();
-            snapshotGraphFunction.diagamRedraw();
-//            eventGraph.diagamRedraw();
-//            eventGraph.diagramFit();
+            snapshotGraphSolo.refreshAll();
+            snapshotGraphFunction.refreshAll();
         });
 
         queryingTab.setWidth("60%");
@@ -242,9 +240,7 @@ public class PGS extends Composite<VerticalLayout> {
         processingTabSheet.add(now, tvttab);
         processingTabSheet.add(new Tab("Snapshot Graph"), snapshotGraphSolo);
 
-        Component sdsViz = snapshotGraphFunction;
-
-        tvttab.add(sdsViz, verticalLayout, nowgrid);
+        tvttab.add(snapshotGraphFunction, verticalLayout, nowgrid);
 
 
         Tab editorTab = new Tab("Query Editor");
@@ -254,7 +250,7 @@ public class PGS extends Composite<VerticalLayout> {
         editor.setHeight("100%");
         editor.setTheme(AceTheme.sqlserver);
         setUpAce(editor);
-        editor.setValue("REGISTER QUERY simple_query STARTING AT NOW {\n" + "MATCH (b:Bike)-[r]->(s:Station)\n" + "WITHIN PT10S\n" + "EMIT b.bike_id as source, type(r) as edge, s.station_id as dest\n" + "ON ENTERING\n" + "EVERY PT5S\n" + "}");
+        editor.setValue("SELECT * FROM STREAM S WITHIN 10sec EVERY 10sec");
 
         HorizontalLayout trash = new HorizontalLayout();
 
@@ -266,31 +262,9 @@ public class PGS extends Composite<VerticalLayout> {
             //TODO here we need to make it load from a folder of use-cases, consider moving the switch case on the service side
             switch (event.getValue()) {
                 case "Bike Sharing":
-                    labels = "Bike;Station";
                     inputStream = "http://stream1";
-                    editor.setValue("REGISTER QUERY student_trick STARTING AT NOW {\n" + "MATCH (:Bike)-[r:rentedAt]->(s:Station),\n" + "q = (b)-[:returnedAt|rentedAt*3..]-(o:Station)\n" + "WITHIN PT1H\n" + "WITH r, s, q, relationships(q) AS rels,\n" + "[n IN nodes(q) WHERE 'Station' IN labels(n) | n.id] AS hs\n" + "WHERE ALL(e IN rels WHERE e.user_id = r.user_id AND e.\n" + "val_time > r.val_time AND e.duration < 20 )\n" + "EMIT r.user_id, s.id, r.val_time, hs\n" + "ON ENTERING EVERY PT5M }");
-                    ig = seraphService.sendEvent("testGraph", inputStream);
-                    loadEvent(nextEventWindow);
-                    break;
-                case "Cyber Security":
-                    labels = "Router;Switch";
-                    inputStream = "http://stream2";
-                    editor.setValue("REGISTER QUERY watch_for_suspects STARTING AT NOW {\n" + "MATCH (c:Event)-[:OCCURRED_AT]->(l:Location)\n" + "WITHIN PT15M\n" + "WITH c, point(l) AS crime_scene\n" + "MATCH (crime:Event)<-[:PARTY_TO]-(p:Suspect)-[:NEAR_TO]->(curr:Location)\n" + "WITHIN PT15M\n" + "WITH c, crime, p, curr,\n" + "distance(point(curr), crime_scene) AS distance\n" + "WHERE distance < 3000 AND c.type=crime.type\n" + "EMIT person, curr, c.description\n" + "SNAPSHOT EVERY PT5M " + "}");
-                    ig = seraphService.sendEvent("cyberTest", inputStream);
-                    loadEvent(nextEventWindow);
-                    break;
-                case "Network Monitoring":
-                    labels = "Event:Person";
-                    inputStream = "http://stream3";
-                    editor.setValue("" + "REGISTER QUERY anomalous_routes STARTING AT NOW {\n" + "MATCH path = allShortestPaths(\n" + "(rack:Rack)-[:HOLDS|ROUTES|CONNECTS*]-(r:Router:Egress))\n" + "WITHIN PT10M\n" + "WITH rack, avg(length(path)) as 10minAvg, path\n" + "WHERE (10minAvg - 5 / 0.5) >= 3\n" + "EMIT path\n" + "SNAPSHOT EVERY PT1M " + "}" + "");
-                    ig = seraphService.sendEvent("cyberTest1", inputStream);
-                    loadEvent(nextEventWindow);
-                    break;
-                case "Basic":
-                    labels = "Bike;Station";
-                    inputStream = "http://stream1";
-                    editor.setValue("REGISTER QUERY <student_trick> STARTING AT NOW {\n" + "MATCH (b:Bike)-[r]->(s:Station)\n" + "WITHIN PT10S\n" + "EMIT b.bike_id as source, type(r) as edge, s.station_id as dest\n" + "ON ENTERING\n" + "EVERY PT5S\n" + "}");
-                    ig = seraphService.sendEvent("testGraph", inputStream);
+                    editor.setValue("SELECT * FROM STREAM S WITHIN 10sec EVERY 10sec");
+                    ig = seraphService.sendEvent(this.event, inputStream);
                     loadEvent(nextEventWindow);
                     break;
                 case "New Stream":
@@ -422,8 +396,6 @@ public class PGS extends Composite<VerticalLayout> {
         componentAt.getStyle().setHeight(size);
         from.remove(componentAt);
         to.addComponentAsFirst(componentAt);
-//        componentAt.diagamRedraw();
-//        componentAt.diagramFit();
     }
 
     private static void addQueryPlan(TabSheet inputRow) {
@@ -457,6 +429,7 @@ public class PGS extends Composite<VerticalLayout> {
 
         plan.setNodesDataProvider(dataProvider);
         plan.setEdgesDataProvider(edgeProvider);
+
 
         inputRow.add(new Tab("Query Plan"), plan);
 
@@ -606,8 +579,8 @@ public class PGS extends Composite<VerticalLayout> {
 
             moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
 
-            Component pg = seraphService.sendEvent("testGraph", inputStream);
-            loadEvent(nextEventWindow, pg);
+            Component pg = seraphService.sendEvent(event, inputStream);
+            loadEvent(nextEventWindow);
 
             Notification.show("testGraph", 500, Notification.Position.BOTTOM_CENTER);
 
@@ -625,6 +598,7 @@ public class PGS extends Composite<VerticalLayout> {
 
             snapshotGraphFunction.refreshAll();
             snapshotGraphSolo.refreshAll();
+
 
         });
         return nextEventButton;
@@ -645,7 +619,7 @@ public class PGS extends Composite<VerticalLayout> {
                         try {
                             ui.access((Command) () -> {
                                 String s = "100%";
-                                Component pGraph3 = seraphService.sendEvent("testGraph", inputStream);
+                                Component pGraph3 = seraphService.sendEvent(event, inputStream);
                                 pGraph3.getStyle().setWidth(s).setHeight(s);
                                 moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
                                 loadEvent(nextEventWindow, pGraph3);
@@ -681,7 +655,7 @@ public class PGS extends Composite<VerticalLayout> {
     }
 
     private Component loadEvent(HorizontalLayout eventView) {
-        Component event = SeraphService.loadEvent("testGraph1.json");
+        Component event = RelationalService.loadEvent(this.event);
         event.getStyle().setWidth("90%").setHeight("90%");
         return loadEvent(eventView, event);
     }

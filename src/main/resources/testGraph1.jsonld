@@ -1,5 +1,10 @@
 {
-  "@context": "http://schema.org/",
+  "@context": {
+        "name": "http://schema.org/name",
+        "jobTitle": "http://schema.org/jobTitle",
+        "telephone": "http://schema.org/telephone",
+        "url": "http://schema.org/url"
+  },
   "@type": "Person",
   "name": "Jane Doe",
   "jobTitle": "Professor",

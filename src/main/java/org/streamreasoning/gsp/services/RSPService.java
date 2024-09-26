@@ -1,6 +1,17 @@
 package org.streamreasoning.gsp.services;
 
+import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.grid.GridVariant;
+import com.vaadin.flow.component.html.H4;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.tabs.TabSheet;
+import com.vaadin.flow.component.timepicker.TimePicker;
 import com.vaadin.flow.data.provider.ListDataProvider;
+import com.vaadin.flow.theme.lumo.LumoUtility;
+import de.f0rce.ace.AceEditor;
 import graph.ContinuousQuery;
 import graph.jena.datatypes.JenaGraphOrBindings;
 import graph.jena.syntax.RSPQLQueryFactory;
@@ -9,8 +20,7 @@ import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.sparql.engine.binding.Binding;
 import org.springframework.stereotype.Service;
 import org.streamreasoning.gsp.data.InputGraph;
-import org.streamreasoning.polyflow.api.processing.ContinuousProgram;
-import org.streamreasoning.polyflow.api.processing.Task;
+import org.streamreasoning.polyflow.api.sds.SDS;
 import org.streamreasoning.polyflow.api.stream.data.DataStream;
 import org.streamreasoning.polyflow.base.processing.ContinuousProgramImpl;
 import org.vaadin.addons.visjs.network.main.Edge;
@@ -24,79 +34,40 @@ import org.vaadin.addons.visjs.network.options.physics.Physics;
 import org.vaadin.addons.visjs.network.options.physics.Repulsion;
 import org.vaadin.addons.visjs.network.util.Shape;
 
-import java.net.URL;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
-import java.util.function.Predicate;
 
 
 @Service
-public class RSPService {
-
-    private final AtomicInteger eventCounter = new AtomicInteger(1);
-    private final ContinuousProgram<Graph, Graph, JenaGraphOrBindings, Binding> cp;
-    private final Map<String, ContinuousQuery<Graph, Graph, JenaGraphOrBindings, Binding>> queries = new HashMap<>();
-    private final Map<String, DataStream<Graph>> streams = new HashMap<>();
-
+public class RSPService extends QueryService<Graph, Graph, JenaGraphOrBindings, Binding> {
 
     public RSPService() {
-        this.cp = new ContinuousProgramImpl<>();
+        super(new ContinuousProgramImpl<>());
+    }
+
+    public static Graph fromFile(String fileName) {
+        System.out.println(fileName);
+        return RDFDataMgr.loadGraph(RSPService.class.getClassLoader().getResource(fileName).getPath());
+    }
+
+    private String register(String seraphQL, String stream) {
+        ContinuousQuery<Graph, Graph, JenaGraphOrBindings, Binding> q = RSPQLQueryFactory.parse(seraphQL);
+        DataStream<Graph> inputStreamColors = q.instream().get(0);
+        streams.put(stream, inputStreamColors);
+        DataStream<Binding> outStream = q.outstream();
+        queries.put(q.id(), q);
+        cp.buildTask(q.getTask(), Collections.singletonList(inputStreamColors), Collections.singletonList(outStream));
+        return q.id();
     }
 
 
-    public void updateSnapshotGraphFromContent(NetworkDiagram snapshotGraph, List<Node> nodes, List<Edge> edges, String id) {
-        List<Graph> elements = queries.get(id).getTask().getSDS().toStream().map(JenaGraphOrBindings::getContent).toList();
-
-        nodes.clear();
-        edges.clear();
-
-
-        elements.stream().flatMap(Graph::stream).forEach(t -> {
-
-            String subject = getID(t.getSubject());
-            String predicate = getID(t.getPredicate());
-            String object = getID(t.getObject());
-
-            Node subjectNode = findNodeById(subject, nodes);
-            if (subjectNode == null) {
-                subjectNode = new Node(subject, subject);
-                subjectNode.setShape(Shape.dot);
-                nodes.add(subjectNode);
-            }
-
-            Node objectNode = findNodeById(object, nodes);
-            if (objectNode == null) {
-                objectNode = new Node(object, object);
-                objectNode.setShape(Shape.dot);
-                nodes.add(objectNode);
-            }
-
-            Edge pred = new Edge(subjectNode, objectNode);
-            pred.setLabel(predicate);
-            pred.setArrows(new Arrows(new ArrowHead()));
-            edges.add(pred);
-
-        });
-
-        snapshotGraph.getEdgesDataProvider().refreshAll();
-        snapshotGraph.getNodesDataProvider().refreshAll();
-
+    public static InputGraph loadEvent(String filename) {
+        return loadEvent(fromFile(filename));
     }
 
-    private static String getID(org.apache.jena.graph.Node n) {
-        if (n.isBlank()) return n.getBlankNodeLabel();
-        if (n.isLiteral()) return n.getLiteral().getLexicalForm();
-        return n.getURI();
-    }
-
-    public static InputGraph fromFile(String filename, String s, String labels) {
-        Graph graph = RDFDataMgr.loadGraph(filename);
-        return fromGraph(graph, s, labels);
-    }
-
-    public static InputGraph fromGraph(Graph pGraph, String s, String labels) {
+    public static InputGraph loadEvent(Graph pGraph) {
         Physics physics = new Physics();
         physics.setEnabled(true);
         physics.setSolver(Physics.Solver.repulsion);
@@ -104,7 +75,8 @@ public class RSPService {
         repulsion.setNodeDistance(1000);
         physics.setRepulsion(repulsion);
 
-        final InputGraph event = new InputGraph(Options.builder().withWidth(s).withHeight(s).withAutoResize(true)
+        final InputGraph event = new InputGraph(Options.builder()
+                //.withWidth(s).withHeight(s).withAutoResize(true)
 //                        .withLayout(layout)
                 .withPhysics(physics).withInteraction(Interaction.builder().withMultiselect(true).build()).build(), System.currentTimeMillis());
 
@@ -147,35 +119,101 @@ public class RSPService {
         event.setEdgesDataProvider(edgeProvider);
 
         return event;
-
-
     }
 
-    public String register(String seraphQL, String selectedStream) {
-        ContinuousQuery<Graph, Graph, JenaGraphOrBindings, Binding> parse = RSPQLQueryFactory.parse(seraphQL);
-        queries.put(parse.id(), parse);
-        parse.instream().forEach(i -> streams.put(i.getName(), i));
-        cp.buildTask(parse.getTask(), parse.instream(), List.of(parse.outstream()));
-        return parse.id();
-    }
-
-    public List<ContinuousQuery<Graph, Graph, JenaGraphOrBindings, Binding>> listQueries() {
-        return queries.values().stream().toList();
-    }
-
-    public void unregisterQuery(String s) {
-//        seraph.unregisterQuery(s);
-    }
-
-    public InputGraph nextEvent2(String event, String stream, String s, String labels) {
+    @Override
+    public InputGraph sendEvent(String event, String stream) {
         Graph pGraph = nextEvent(event, stream);
-        return fromGraph(pGraph, s, labels);
+        return loadEvent(pGraph);
     }
 
-    public Graph nextEvent(String event, String stream) {
-        eventCounter.compareAndSet(2, 1);
-        URL url = RSPService.class.getClassLoader().getResource(event + (eventCounter.getAndIncrement()) + ".jsonld");
-        Graph pGraph2 = RDFDataMgr.loadGraph(url.getPath());
+    @Override
+    public void registerNewQuery(String inputStream, DataComponent snapshotGraphFunction, DataComponent snapshotGraphSolo, HorizontalLayout tvttab, TimePicker timePicker1, TabSheet processingTabSheet, AceEditor editor, VerticalLayout outputRowContainer) {
+        Grid<Binding> lastTAT;
+        Component component = processingTabSheet.getComponent(lastTATTab);
+        if (component == null) {
+            processingTabSheet.add(lastTATTab, lastTAT = new Grid<>(Binding.class));
+            lastTAT.setId("lastTAT");
+            lastTAT.setWidth("100%");
+            lastTAT.setHeight("100%");
+            lastTAT.setPageSize(10);
+            lastTAT.getStyle().setFontSize("1em");
+        } else
+            lastTAT = (Grid<Binding>) component;
+
+        Grid<Binding> nowgrid;
+        tvttab.replace(tvttab.getChildren().toList().get(2), nowgrid = new Grid<>(Binding.class));
+
+        nowgrid.setId("nowgrid");
+        nowgrid.setWidth("100%");
+        nowgrid.setHeight("100%");
+        nowgrid.setPageSize(10);
+        nowgrid.getStyle().setFontSize("12px");
+
+        String cqe = register(editor.getValue(), inputStream);
+
+        HorizontalLayout outputRow = new HorizontalLayout();
+        String id = cqe; //TODO nel task
+        outputRow.setId(id);
+        outputRow.addClassName(LumoUtility.Gap.MEDIUM);
+        outputRow.setWidth("100%");
+        outputRow.setHeight("200px");
+
+        outputRow.add(new H4(id));
+
+        outputRowContainer.add(outputRow);
+
+        List<Binding> res = new ArrayList<>();
+        ListDataProvider<Binding> resultDataProvider = new MyDataProvider<>(res);
+
+        lastTAT.setDataProvider(resultDataProvider);
+        nowgrid.setDataProvider(resultDataProvider);
+
+        queries.get(cqe).getResultVars().forEach(k -> {
+            lastTAT.addColumn(map -> map.get(k)).setHeader(k);
+            nowgrid.addColumn(map -> map.get(k)).setHeader(k);
+        });
+
+        lastTAT.getColumnByKey("empty").setVisible(false);
+        nowgrid.getColumnByKey("empty").setVisible(false);
+
+        lastTAT.addColumn(map -> map.get("Id")).setHeader("Id");
+        nowgrid.addColumn(map -> map.get("Id")).setHeader("Id");
+
+        lastTAT.addColumn(map -> map.get("win_start")).setHeader("win_start");
+        nowgrid.addColumn(map -> map.get("win_start")).setHeader("win_start");
+
+        lastTAT.addColumn(map -> map.get("win_end")).setHeader("win_end");
+        nowgrid.addColumn(map -> map.get("win_end")).setHeader("win_end");
+
+//        addConsumer(id, lastTAT, nowgrid, res, resultDataProvider, timePicker1, outputRow, snapshotGraphFunction, snapshotGraphSolo, nodes, edges);
+
+        queries.get(id).outstream().addConsumer((out, result, ts) -> {
+//            result.put("Id", idCounter.getAndIncrement());
+
+            lastTAT.getColumnByKey("empty").setVisible(false);
+            nowgrid.getColumnByKey("empty").setVisible(false);
+
+            res.add(result);
+
+            resultDataProvider.refreshAll();
+
+            //TODO add focus based on selected query
+            appendResultTable(outputRow, result, ts, res);
+            SDS<JenaGraphOrBindings> sds = queries.get(id).getTask().getSDS();
+
+            updateSnapshotGraphFromContent((NetworkDiagram) snapshotGraphFunction, sds);
+            updateSnapshotGraphFromContent((NetworkDiagram) snapshotGraphSolo, sds);
+            timePicker1.setValue(LocalTime.ofInstant(Instant.ofEpochMilli(ts), ZoneId.systemDefault()));
+            System.out.println(result);
+        });
+
+        Notification.show("Query " + cqe + " Was successfully registered");
+    }
+
+    private Graph nextEvent(String event, String stream) {
+        eventCounter.compareAndSet(4, 1);
+        Graph pGraph2 = RDFDataMgr.loadGraph(RSPService.class.getClassLoader().getResource(event + (eventCounter.getAndIncrement()) + ".jsonld").getPath());
         streams.computeIfPresent(stream, (s, pGraphDataStream) -> {
             pGraphDataStream.put(pGraph2, System.currentTimeMillis());
             return pGraphDataStream;
@@ -183,37 +221,88 @@ public class RSPService {
         return pGraph2;
     }
 
+    private void updateSnapshotGraphFromContent(NetworkDiagram snapshotGraph, SDS<JenaGraphOrBindings> sds) {
+        List<Graph> elements = sds.toStream().map(JenaGraphOrBindings::getContent).toList();
 
-    public Task<Graph, Graph, JenaGraphOrBindings, Binding> parse(String value, String stream) {
-//        try {
-//            return QueryFactory.parse(value, stream);
-//        } catch (IOException e) {
-//            throw new RuntimeException(e);
-//        }
-        return null;
+        ListDataProvider<Edge> edgesDataProvider = (ListDataProvider<Edge>) snapshotGraph.getEdgesDataProvider();
+        ListDataProvider<Node> nodesDataProvider = (ListDataProvider<Node>) snapshotGraph.getNodesDataProvider();
+
+        Collection<Edge> edges1 = edgesDataProvider.getItems();
+
+        edges1.clear();
+
+        Collection<Node> nodes1 = nodesDataProvider.getItems();
+
+        nodes1.clear();
+
+        elements.stream().flatMap(Graph::stream).forEach(t -> {
+
+            String subject = getID(t.getSubject());
+            String predicate = getID(t.getPredicate());
+            String object = getID(t.getObject());
+
+            Node subjectNode = findNodeById(subject, nodes1);
+            if (subjectNode == null) {
+                subjectNode = new Node(subject, subject);
+                subjectNode.setShape(Shape.dot);
+                nodes1.add(subjectNode);
+            }
+
+            Node objectNode = findNodeById(object, nodes1);
+            if (objectNode == null) {
+                objectNode = new Node(object, object);
+                objectNode.setShape(Shape.dot);
+                nodes1.add(objectNode);
+            }
+
+            Edge pred = new Edge(subjectNode, objectNode);
+            pred.setLabel(predicate);
+            pred.setArrows(new Arrows(new ArrowHead()));
+            edges1.add(pred);
+
+        });
+
+        edgesDataProvider.refreshAll();
+        nodesDataProvider.refreshAll();
+
+    }
+
+    private void appendResultTable(HorizontalLayout outputRow, Binding arg, long ts, List<Binding> res) {
+        outputRow.getChildren()
+                .filter(component -> !(component instanceof H4))
+                .map(obj -> (Grid) obj)
+                .filter(grid -> grid.getId().filter(id -> id.equals(ts + ""))
+                        .isPresent())
+                .findFirst().or(() -> {
+                    Grid<Binding> g = new Grid(Binding.class);
+                    List<Binding> items = new ArrayList<>();
+                    MyDataProvider<Binding> mapDP = new MyDataProvider<>(items);
+                    g.setDataProvider(mapDP);
+                    g.setId(ts + "");
+
+                    //This part depends on query output
+                    arg.varsMentioned().forEach(k -> g.addColumn(map -> map.get(k)).setHeader(k.getVarName()));
+
+                    res.clear();
+
+                    g.addThemeVariants(GridVariant.LUMO_COLUMN_BORDERS);
+                    g.addThemeVariants(GridVariant.LUMO_ROW_STRIPES);
+                    g.setWidth("100%");
+                    g.setHeight("100%");
+                    g.setPageSize(10);
+                    outputRow.add(g);
+                    return Optional.of(g);
+                }).ifPresent(g -> ((ListDataProvider) g.getDataProvider()).getItems().add(arg));
     }
 
 
-    public List<String> getResultVars(String s) {
-        return queries.get(s).getResultVars();
+    private static String getID(org.apache.jena.graph.Node n) {
+        if (n.isBlank()) return n.getBlankNodeLabel();
+        if (n.isLiteral()) return n.getLiteral().getLexicalForm();
+        return n.getURI();
     }
 
-    public static <T> Predicate<T> distinctByKey(Function<? super T, ?> keyExtractor) {
-        Set<Object> seen = ConcurrentHashMap.newKeySet();
-        return t -> seen.add(keyExtractor.apply(t));
-    }
-
-    public DataStream<Binding> outstream(String id) {
-        return queries.get(id).outstream();
-    }
-
-    /**
-     * Find node in network diagram by ID
-     *
-     * @param id String
-     * @return Node
-     */
-    public static Node findNodeById(String id, List<Node> nodes) {
+    private static Node findNodeById(String id, Collection<Node> nodes) {
         for (Node node : nodes) {
             if (node.getId().equals(id)) {
                 return node;
@@ -221,4 +310,5 @@ public class RSPService {
         }
         return null;
     }
+
 }

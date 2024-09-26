@@ -5,8 +5,8 @@
         "telephone": "http://schema.org/telephone",
         "url": "http://schema.org/url"
   },
-  "@type": "Person2",
-  "name": "Jane Doe2",
+  "@type": "Person5",
+  "name": "Jane Doe5",
   "jobTitle": "Professor2",
   "telephone": "(425) 123-4567",
   "url": "http://www.janedoe.com"

@@ -7,7 +7,6 @@ import com.vaadin.flow.component.html.H4;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.tabs.Tab;
 import com.vaadin.flow.component.tabs.TabSheet;
 import com.vaadin.flow.component.timepicker.TimePicker;
 import com.vaadin.flow.data.provider.ListDataProvider;
@@ -18,16 +17,13 @@ import graph.seraph.events.PGraph;
 import graph.seraph.events.PGraphImpl;
 import graph.seraph.events.PGraphOrResult;
 import graph.seraph.events.Result;
-import graph.seraph.streams.PGraphStreamGenerator;
 import graph.seraph.syntax.SeraphQueryFactory;
 import org.springframework.stereotype.Service;
 import org.streamreasoning.gsp.data.InputGraph;
-import org.streamreasoning.gsp.views.OldPGS;
-import org.streamreasoning.polyflow.api.processing.ContinuousProgram;
+import org.streamreasoning.polyflow.api.sds.SDS;
 import org.streamreasoning.polyflow.api.stream.data.DataStream;
 import org.streamreasoning.polyflow.base.processing.ContinuousProgramImpl;
 import org.vaadin.addons.visjs.network.main.Edge;
-import org.vaadin.addons.visjs.network.main.NetworkDiagram;
 import org.vaadin.addons.visjs.network.main.Node;
 import org.vaadin.addons.visjs.network.options.Interaction;
 import org.vaadin.addons.visjs.network.options.Options;
@@ -44,90 +40,30 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 
 @Service
-public class SeraphService {
-
-    private final AtomicInteger eventCounter = new AtomicInteger(1);
-    private final AtomicInteger idCounter = new AtomicInteger(1);
-    private final ContinuousProgram<PGraph, PGraph, PGraphOrResult, Result> cp;
-    private final PGraphStreamGenerator generator;
-    private final Map<String, ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result>> queries = new HashMap<>();
-    private final Map<String, DataStream<PGraph>> streams = new HashMap<>();
-    private Tab lastTATTab = new Tab("Last Time-Annotated Table");
+public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, Result> {
 
     public SeraphService() {
-        this.cp = new ContinuousProgramImpl<>();
-        this.generator = new PGraphStreamGenerator();
-
+        super(new ContinuousProgramImpl<>());
     }
 
-    public static PGraph fromJson(String fileName) {
+    public static PGraph fromFile(String fileName) {
         System.out.println(fileName);
         try {
-            return PGraphImpl.fromJson(new FileReader(OldPGS.class.getClassLoader().getResource(fileName).getPath()));
+            return PGraphImpl.fromJson(new FileReader(SeraphService.class.getClassLoader().getResource(fileName).getPath()));
         } catch (FileNotFoundException e) {
             return PGraphImpl.createEmpty();
         }
     }
 
-    public void updateSnapshotGraphFromContent(NetworkDiagram snapshotGraph, List<Node> nodes, List<Edge> edges, String id) {
-        List<PGraph> elements = queries.get(id).getTask().getSDS().toStream().map(PGraphOrResult::getContent).toList();
-
-        nodes.clear();
-        edges.clear();
-
-        elements
-                .stream().flatMap(pGraph -> {
-                    Stream<PGraph.Node> stream = Arrays.stream(pGraph.nodes());
-                    return stream;
-                })
-                .map(n -> {
-                    Node node = new Node(n.id() + "", n.labels()[0] + "\n" + n.id());
-                    if ("Station".equals(n.labels()[0])) {
-                        node.setColor("red");
-                    }
-                    return node;
-                })
-                .filter(distinctByKey(Node::getId))
-                .forEach(nodes::add);
-
-        elements.stream()
-                .flatMap(pGraph -> Arrays.stream(pGraph.edges()))
-                .map(e -> {
-                    Edge edge = new Edge(e.from() + "", e.to() + "");
-                    edge.setLabel(e.labels()[0] + "\n" +
-                                  "user_id:" + e.property("user_id") + "\n" +
-                                  "val_time:" + e.property("val_time") + "\n" + "");
-
-                    return edge;
-                })
-                .map(edge -> {
-                    if (edge.getLabel().contains("returnedAt")) {
-                        edge.setColor("orange");
-                    }
-                    Arrows arrowsObject = new Arrows(new ArrowHead());
-                    edge.setArrows(arrowsObject);
-                    return edge;
-                })
-                .forEach(edges::add);
-
-        snapshotGraph.getEdgesDataProvider().refreshAll();
-        snapshotGraph.getNodesDataProvider().refreshAll();
-
+    public static InputGraph loadEvent(String filename) {
+        return loadEvent(fromFile(filename));
     }
 
-    public static InputGraph fromJson2(String filename, String s, String labels) {
-        return fromJson2(fromJson(filename), s, labels);
-    }
-
-    public static InputGraph fromJson2(PGraph pGraph, String s, String labels) {
+    public static InputGraph loadEvent(PGraph pGraph) {
         Physics physics = new Physics();
         physics.setEnabled(true);
         physics.setSolver(Physics.Solver.repulsion);
@@ -135,13 +71,14 @@ public class SeraphService {
         repulsion.setNodeDistance(1000);
         physics.setRepulsion(repulsion);
 
-
         final InputGraph event =
-                new InputGraph(Options.builder().withWidth(s).withHeight(s)
+                new InputGraph(Options.builder()
+                        //.withWidth(percentage).withHeight(percentage)
                         .withAutoResize(true)
 //                        .withLayout(layout)
                         .withPhysics(physics)
-                        .withInteraction(Interaction.builder().withMultiselect(true).build()).build(), pGraph.timestamp());
+                        .withInteraction(Interaction.builder()
+                                .withMultiselect(true).build()).build(), pGraph.timestamp());
 
         List<Node> ns = Arrays.stream(pGraph.nodes()).sequential().map(n -> {
             Node node = new Node(n.id() + "", n.labels()[0] + "\n" + n.id());
@@ -177,111 +114,45 @@ public class SeraphService {
         event.setNodesDataProvider(dataProvider);
         event.setEdgesDataProvider(edgeProvider);
 
+
+        event.addAttachListener(event1 -> {
+            event.diagamRedraw();
+            event.diagramFit();
+        });
+
+        event.addSelectListener(click -> {
+            Notification.show("The event timestamp is [" +
+                              event.timestamp +
+                              "]");
+        });
+
         return event;
 
 
     }
 
-    public String register(String seraphQL, String stream) {
-        ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result> q = parse(seraphQL, stream);
-        DataStream<PGraph> inputStreamColors = q.instream().get(0);
-        streams.put(stream, inputStreamColors);
-        DataStream<Result> outStream = q.outstream();
-        queries.put(q.id(), q);
-        cp.buildTask(q.getTask(), Collections.singletonList(inputStreamColors), Collections.singletonList(outStream));
-        return q.id();
-    }
-
-    public List<String> listQueries() {
-        return queries.values().stream().map(ContinuousQuery::id).toList();
-    }
-
-    public void unregisterQuery(String s) {
-//        seraph.unregisterQuery(s);
-    }
-
-    public InputGraph nextEvent2(String event, String stream, String s, String labels) {
-        PGraph pGraph = nextEvent(event, stream);
-        return fromJson2(pGraph, s, labels);
-    }
-
-    private PGraph nextEvent(String event, String stream) {
-        eventCounter.compareAndSet(10, 1);
-        URL url = SeraphService.class.getClassLoader().getResource(event + (eventCounter.getAndIncrement()) + ".json");
-        try (FileReader fileReader = new FileReader(url.getPath())) {
-            PGraph pGraph2 = PGraphImpl.fromJson(fileReader);
-            streams.computeIfPresent(stream, (s, pGraphDataStream) -> {
-                pGraphDataStream.put(pGraph2, System.currentTimeMillis());
-                return pGraphDataStream;
-            });
-            return pGraph2;
-        } catch (FileNotFoundException ex) {
-            throw new RuntimeException(ex);
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
-    }
-
-    private ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result> parse(String value, String stream) {
+    private String register(String seraphQL, String stream) {
         try {
-            return SeraphQueryFactory.parse(value, stream);
+            ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result> q = SeraphQueryFactory.parse(seraphQL, stream);
+            DataStream<PGraph> inputStreamColors = q.instream().get(0);
+            streams.put(stream, inputStreamColors);
+            DataStream<Result> outStream = q.outstream();
+            queries.put(q.id(), q);
+            cp.buildTask(q.getTask(), Collections.singletonList(inputStreamColors), Collections.singletonList(outStream));
+            return q.id();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public List<String> getResultVars(String cqe) {
-        return queries.get(cqe).getResultVars();
+    @Override
+    public InputGraph sendEvent(String event, String stream) {
+        PGraph pGraph = nextEvent(event, stream);
+        return loadEvent(pGraph);
     }
 
-    public DataStream<Result> outstream(String id) {
-        return queries.get(id).outstream();
-    }
-
-//    public DataStream<OutputTable> outstream(String id) {
-//        return queries.get(id).outstream().addConsumer((dataStream, result, l) -> {
-//
-//            return;
-//
-//        });
-//    }
-
-    private <T> Predicate<T> distinctByKey(Function<? super T, ?> keyExtractor) {
-        Set<Object> seen = ConcurrentHashMap.newKeySet();
-        return t -> seen.add(keyExtractor.apply(t));
-    }
-
-    public void appendResultTable(HorizontalLayout outputRow, Result arg, long ts, List<Result> res) {
-        outputRow.getChildren()
-                .filter(component -> !(component instanceof H4))
-                .map(obj -> (Grid) obj)
-                .filter(grid -> grid.getId().filter(id -> id.equals(ts + ""))
-                        .isPresent())
-                .findFirst().or(() -> {
-                    Grid<Result> g = new Grid(Result.class);
-                    List<Result> items = new ArrayList<>();
-                    MyDataProvider<Result> mapDP = new MyDataProvider<>(items);
-                    g.setDataProvider(mapDP);
-                    g.setId(ts + "");
-
-                    //This part depends on query output
-                    arg.keySet().forEach(k -> g.addColumn(map -> map.get(k)).setHeader(k));
-
-                    res.clear();
-
-                    g.addThemeVariants(GridVariant.LUMO_COLUMN_BORDERS);
-                    g.addThemeVariants(GridVariant.LUMO_ROW_STRIPES);
-                    g.setWidth("100%");
-                    g.setHeight("100%");
-                    g.setPageSize(10);
-                    outputRow.add(g);
-                    return Optional.of(g);
-                }).ifPresent(g -> ((ListDataProvider) g.getDataProvider()).getItems().add(arg));
-    }
-
-    public void registerNewQuery(String inputStream, List<Node> nodes, List<Edge> edges, NetworkDiagram snapshotGraphFunction, NetworkDiagram snapshotGraphSolo, Grid<?> nowgrid2, HorizontalLayout tvttab, TimePicker timePicker1, TabSheet processingTabSheet, AceEditor editor, VerticalLayout outputRowContainer) {
-
-        //todo if processingTabSheet contains already, ti should not recreate it.
+    public void registerNewQuery(String inputStream, DataComponent snapshotGraphFunction, DataComponent snapshotGraphSolo, HorizontalLayout tvttab, TimePicker timePicker1, TabSheet processingTabSheet, AceEditor editor, VerticalLayout outputRowContainer) {
+//todo if processingTabSheet contains already, ti should not recreate it.
         Grid<Result> lastTAT;
         Component component = processingTabSheet.getComponent(lastTATTab);
         if (component == null) {
@@ -317,12 +188,12 @@ public class SeraphService {
         outputRowContainer.add(outputRow);
 
         List<Result> res = new ArrayList<>();
-        ListDataProvider<Result> resultDataProvider = new SeraphService.MyDataProvider<>(res);
+        ListDataProvider<Result> resultDataProvider = new MyDataProvider<>(res);
 
         lastTAT.setDataProvider(resultDataProvider);
         nowgrid.setDataProvider(resultDataProvider);
 
-        getResultVars(id).forEach(k -> {
+        queries.get(cqe).getResultVars().forEach(k -> {
             lastTAT.addColumn(map -> map.get(k)).setHeader(k);
             nowgrid.addColumn(map -> map.get(k)).setHeader(k);
         });
@@ -341,7 +212,7 @@ public class SeraphService {
 
 //        addConsumer(id, lastTAT, nowgrid, res, resultDataProvider, timePicker1, outputRow, snapshotGraphFunction, snapshotGraphSolo, nodes, edges);
 
-        outstream(id).addConsumer((out, result, ts) -> {
+        queries.get(id).outstream().addConsumer((out, result, ts) -> {
             result.put("Id", idCounter.getAndIncrement());
 
             lastTAT.getColumnByKey("empty").setVisible(false);
@@ -354,8 +225,8 @@ public class SeraphService {
             //TODO add focus based on selected query
             appendResultTable(outputRow, result, ts, res);
 
-            updateSnapshotGraphFromContent(snapshotGraphFunction, nodes, edges, cqe);
-            updateSnapshotGraphFromContent(snapshotGraphSolo, nodes, edges, cqe);
+            updateSnapshotGraphFromContent(snapshotGraphFunction, queries.get(id).getTask().getSDS());
+            updateSnapshotGraphFromContent(snapshotGraphSolo, queries.get(id).getTask().getSDS());
             timePicker1.setValue(LocalTime.ofInstant(Instant.ofEpochMilli(ts), ZoneId.systemDefault()));
             System.out.println(result);
         });
@@ -363,22 +234,106 @@ public class SeraphService {
         Notification.show("Query " + cqe + " Was successfully registered");
     }
 
-    public static class MyDataProvider<T> extends ListDataProvider<T> {
-
-        public MyDataProvider(Collection<T> items) {
-            super(items);
+    private PGraph nextEvent(String event, String stream) {
+        eventCounter.compareAndSet(10, 1);
+        URL url = SeraphService.class.getClassLoader().getResource(event + (eventCounter.getAndIncrement()) + ".json");
+        try (FileReader fileReader = new FileReader(url.getPath())) {
+            PGraph pGraph2 = PGraphImpl.fromJson(fileReader);
+            streams.computeIfPresent(stream, (s, pGraphDataStream) -> {
+                pGraphDataStream.put(pGraph2, System.currentTimeMillis());
+                return pGraphDataStream;
+            });
+            return pGraph2;
+        } catch (FileNotFoundException ex) {
+            throw new RuntimeException(ex);
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
         }
+    }
 
-        @Override
-        public String getId(T item) {
-            Objects.requireNonNull(item, "Cannot provide an id for a null item.");
-            if (item instanceof Map<?, ?> map) {
-                if (map.get("id") != null) return map.get("id").toString();
-                else return item.toString();
-            } else {
-                return item.toString();
-            }
-        }
+
+    private void updateSnapshotGraphFromContent(DataComponent snapshotGraph, SDS<PGraphOrResult> sds) {
+        List<PGraph> elements = sds.toStream().map(PGraphOrResult::getContent).toList();
+//
+//        ListDataProvider<Node> nodesDataProvider = (ListDataProvider<Node>) snapshotGraph.getNodesDataProvider();
+//        ListDataProvider<Edge> edgesDataProvider = (ListDataProvider<Edge>) snapshotGraph.getEdgesDataProvider();
+//
+//        Collection<Edge> edges = edgesDataProvider.getItems();
+//        Collection<Node> nodes = nodesDataProvider.getItems();
+
+//        edges.clear();
+//        nodes.clear();
+
+        snapshotGraph.clear();
+
+        elements
+                .stream().flatMap(pGraph -> {
+                    Stream<PGraph.Node> stream = Arrays.stream(pGraph.nodes());
+                    return stream;
+                })
+                .map(n -> {
+                    Node node = new Node(n.id() + "", n.labels()[0] + "\n" + n.id());
+                    if ("Station".equals(n.labels()[0])) {
+                        node.setColor("red");
+                    }
+                    return node;
+                })
+                .filter(distinctByKey(Node::getId))
+                .forEach(snapshotGraph::add);
+
+
+        elements.stream()
+                .flatMap(pGraph -> Arrays.stream(pGraph.edges()))
+                .map(e -> {
+                    Edge edge = new Edge(e.from() + "", e.to() + "");
+                    edge.setLabel(e.labels()[0] + "\n" +
+                                  "user_id:" + e.property("user_id") + "\n" +
+                                  "val_time:" + e.property("val_time") + "\n" + "");
+
+                    return edge;
+                })
+                .map(edge -> {
+                    if (edge.getLabel().contains("returnedAt")) {
+                        edge.setColor("orange");
+                    }
+                    Arrows arrowsObject = new Arrows(new ArrowHead());
+                    edge.setArrows(arrowsObject);
+                    return edge;
+                })
+                .forEach(snapshotGraph::add);
+
+        snapshotGraph.refreshAll();
+//        nodesDataProvider.refreshAll();
 
     }
+
+    private void appendResultTable(HorizontalLayout outputRow, Result arg, long ts, List<Result> res) {
+        outputRow.getChildren()
+                .filter(component -> !(component instanceof H4))
+                .map(obj -> (Grid) obj)
+                .filter(grid -> grid.getId().filter(id -> id.equals(ts + ""))
+                        .isPresent())
+                .findFirst().or(() -> {
+                    Grid<Result> g = new Grid(Result.class);
+                    List<Result> items = new ArrayList<>();
+                    MyDataProvider<Result> mapDP = new MyDataProvider<>(items);
+                    g.setDataProvider(mapDP);
+                    g.setId(ts + "");
+
+                    //This part depends on query output
+                    arg.keySet().forEach(k -> g.addColumn(map -> map.get(k)).setHeader(k));
+
+                    res.clear();
+
+                    g.addThemeVariants(GridVariant.LUMO_COLUMN_BORDERS);
+                    g.addThemeVariants(GridVariant.LUMO_ROW_STRIPES);
+                    g.setWidth("100%");
+                    g.setHeight("100%");
+                    g.setPageSize(10);
+                    outputRow.add(g);
+                    return Optional.of(g);
+                }).ifPresent(g -> ((ListDataProvider) g.getDataProvider()).getItems().add(arg));
+    }
+
+
 }

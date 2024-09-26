@@ -52,6 +52,7 @@ public class MainLayout extends AppLayout {
         nav.addItem(new SideNavItem("About", AboutView.class, LineAwesomeIcon.FILE.create()));
         nav.addItem(new SideNavItem("RSP", RSP.class, LineAwesomeIcon.PENCIL_RULER_SOLID.create()));
         nav.addItem(new SideNavItem("PGS", PGS.class, LineAwesomeIcon.ADDRESS_BOOK.create()));
+        nav.addItem(new SideNavItem("REL", Relational.class, LineAwesomeIcon.ADDRESS_BOOK.create()));
 
         return nav;
     }
