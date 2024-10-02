@@ -5,6 +5,13 @@ It contains all the necessary configuration and some placeholder files to get yo
 
 ## Running the application
 
+Clone and locally install the two repositories below using the following command
+
+`mvn clean package -Pproduction`
+
+- [Ace Editor](https://github.com/riccardotommasini/ace/)
+- [Vis Network](https://github.com/riccardotommasini/vis-network-vaadin/)
+
 The project is a standard Maven project. To run it from the command line,
 type `mvnw` (Windows), or `./mvnw` (Mac & Linux), then open
 http://localhost:8080 in your browser.
@@ -14,7 +21,7 @@ Maven project. Read more on [how to import Vaadin projects to different IDEs](ht
 
 ## Deploying to Production
 
-To create a production build, call `mvnw clean package -Pproduction` (Windows),
+To create a production build, call `mvn clean package -Pproduction` (Windows),
 or `./mvnw clean package -Pproduction` (Mac & Linux).
 This will build a JAR file with all the dependencies and front-end resources,
 ready to be deployed. The file can be found in the `target` folder after the build completes.
