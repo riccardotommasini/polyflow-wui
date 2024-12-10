@@ -26,7 +26,6 @@ import com.vaadin.flow.data.provider.ListDataProvider;
 import com.vaadin.flow.function.ValueProvider;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.server.Command;
 import com.vaadin.flow.shared.Registration;
 import com.vaadin.flow.theme.lumo.LumoUtility.Gap;
 import de.f0rce.ace.AceEditor;
@@ -34,8 +33,8 @@ import de.f0rce.ace.enums.AceMode;
 import de.f0rce.ace.enums.AceTheme;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.streamreasoning.gsp.data.GraphDataComponent;
-import org.streamreasoning.gsp.services.DataComponent;
 import org.streamreasoning.gsp.services.SeraphService;
+import org.streamreasoning.gsp.views.rows.ControlRow;
 import org.vaadin.addons.visjs.network.main.Edge;
 import org.vaadin.addons.visjs.network.main.NetworkDiagram;
 import org.vaadin.addons.visjs.network.main.Node;
@@ -68,14 +67,23 @@ public class PGS extends Composite<VerticalLayout> {
     static boolean paused = true;
     static String inputStream = "http://stream1";
     private String labels = "Bike;Station";
+    private GraphDataComponent snapshotGraphFunction;
+    private GraphDataComponent snapshotGraphSolo;
+    private HorizontalLayout streamView;
+    private HorizontalLayout nextEventWindow;
+    private VerticalLayout outputRowContainer;
+
 
     @Autowired
     private SeraphService seraphService;
 
     public PGS() {
 
+
+        // This is the fucker that needs to be isolated
+        // that is the "inputRow"
         HorizontalLayout inputRow = new HorizontalLayout();
-        HorizontalLayout streamView = new HorizontalLayout();
+        this.streamView = new HorizontalLayout();
         streamView.setHeight("100%");
         streamView.setWidth("100%");
 
@@ -100,8 +108,14 @@ public class PGS extends Composite<VerticalLayout> {
         h.setLayout(HierarchicalLayout.LayoutStyle.direction);
         h.setDirection(HierarchicalLayout.Direction.UD);
 
+        // These are the two diagrams on the page
+        // They share the width, but have the entire height of the row
+        // It is the content within them that needs to be regulated
+
+        // This is the icon in the top left
         final NetworkDiagram placeHolder1 = new NetworkDiagram(Options.builder().withWidth("50px").withHeight("100px").withLayout(layout).withInteraction(Interaction.builder().withMultiselect(true).build()).build());
 
+        // This is the icon in the top right
         final NetworkDiagram placeHolder2 = new NetworkDiagram(Options.builder().withWidth("50px").withHeight("100px").withLayout(layout).withInteraction(Interaction.builder().withMultiselect(true).build()).build());
 
         final var dataProvider1 = new ListDataProvider<Node>(placehodlerNodes);
@@ -117,6 +131,7 @@ public class PGS extends Composite<VerticalLayout> {
         streamView.getStyle().set("border-color", "red");
         streamView.setJustifyContentMode(FlexComponent.JustifyContentMode.START);
 
+        // I can't find documentation on this function "diagramfit"
         placeHolder1.diagramFit();
         placeHolder2.diagramFit();
 
@@ -127,8 +142,10 @@ public class PGS extends Composite<VerticalLayout> {
 
         HorizontalLayout queryRow = new HorizontalLayout();
 
-        HorizontalLayout nextEventWindow = new HorizontalLayout();
+        this.nextEventWindow = new HorizontalLayout();
         VerticalLayout outerNextEventWindow = new VerticalLayout();
+
+        // OuterNextWindow Seems to have the content of the window I want
 
         outerNextEventWindow.setWidth("100%");
         outerNextEventWindow.setHeight("100%");
@@ -185,8 +202,10 @@ public class PGS extends Composite<VerticalLayout> {
         final var dataProvider = new ListDataProvider<Node>(nodes);
         final var edgeProvider = new ListDataProvider<Edge>(edges);
 
-        final GraphDataComponent snapshotGraphFunction = new GraphDataComponent(Options.builder().withWidth("100%").withHeight("100%").withInteraction(Interaction.builder().withMultiselect(true).build()).build(), dataProvider, edgeProvider);
-        final GraphDataComponent snapshotGraphSolo = new GraphDataComponent(Options.builder().withWidth("100%").withHeight("100%").withPhysics(physics).withInteraction(Interaction.builder().withMultiselect(true).build()).build(), dataProvider, edgeProvider);
+
+        // Think this is the internal one
+        this.snapshotGraphFunction = new GraphDataComponent(Options.builder().withWidth("100%").withHeight("100%").withInteraction(Interaction.builder().withMultiselect(true).build()).build(), dataProvider, edgeProvider);
+        this.snapshotGraphSolo = new GraphDataComponent(Options.builder().withWidth("100%").withHeight("100%").withPhysics(physics).withInteraction(Interaction.builder().withMultiselect(true).build()).build(), dataProvider, edgeProvider);
 
 
         // Time Varying Table
@@ -306,7 +325,7 @@ public class PGS extends Composite<VerticalLayout> {
 
         addQueryPlan(queryingTab);
 
-        VerticalLayout outputRowContainer = new VerticalLayout();
+        this.outputRowContainer = new VerticalLayout();
 
         addRegisteredQueries(queryingTab, outputRowContainer);
 
@@ -315,26 +334,7 @@ public class PGS extends Composite<VerticalLayout> {
         //the result table should be generated based on binding plus the two validity columns
 
         //Control Row with all buttons
-        HorizontalLayout controlRow = new HorizontalLayout();
-        HorizontalLayout leftControl = new HorizontalLayout();
-        HorizontalLayout rightControl = new HorizontalLayout();
-        controlRow.add(leftControl, rightControl);
-
-        Button sendQuery = new Button();
-        sendQuery.setText("Register Query");
-        sendQuery.addClassName("special");
-        sendQuery.setHeight("90%");
-
-        sendQuery.setWidth("min-content");
-        sendQuery.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-
-        sendQuery.addClickListener(click -> seraphService.registerNewQuery(inputStream, snapshotGraphFunction, snapshotGraphSolo, tvttab, timePicker1, processingTabSheet, editor, outputRowContainer));
-
-        Button nextEventButton = ingestOneEvent(streamView, nextEventWindow, snapshotGraphFunction, snapshotGraphSolo, outputRowContainer);
-
-        Button realTimeButton = startRuntimeIngestion(streamView, nextEventWindow);
-
-        Button stopButton = stopRuntimeIngestion(realTimeButton);
+        HorizontalLayout controlRow = new ControlRow(this, tvttab, timePicker1, processingTabSheet, editor, outputRowContainer);
 
         /// Sizing Components
 
@@ -353,21 +353,7 @@ public class PGS extends Composite<VerticalLayout> {
         queryRow.setWidth("100%");
         queryRow.setHeight("40%");
 
-        controlRow.setWidthFull();
         getContent().setFlexGrow(1.0, controlRow);
-        controlRow.addClassName(Gap.SMALL);
-        controlRow.setWidth("100%");
-        controlRow.setHeight("70px");
-
-        leftControl.setWidthFull();
-        leftControl.addClassName(Gap.SMALL);
-        leftControl.setWidth("70%");
-        leftControl.setHeight("100%");
-
-        rightControl.setWidthFull();
-        rightControl.addClassName(Gap.SMALL);
-        rightControl.setWidth("60%");
-        rightControl.setHeight("100%");
 
         outputRowContainer.setWidthFull();
         getContent().setFlexGrow(1.0, outputRowContainer);
@@ -384,10 +370,6 @@ public class PGS extends Composite<VerticalLayout> {
 
         getContent().add(new Hr());
         getContent().add(controlRow);
-        leftControl.add(nextEventButton);
-        leftControl.add(realTimeButton);
-        leftControl.add(stopButton);
-        leftControl.add(sendQuery);
 //        rightControl.add(removeQuery);
         getContent().add(new Hr());
         getContent().add(outputRowContainer);
@@ -395,10 +377,6 @@ public class PGS extends Composite<VerticalLayout> {
 
     private static Button stopRuntimeIngestion(Button realTimeButton) {
         Button stopButton = new Button();
-        stopButton.setText("Pause Computation");
-        stopButton.setWidth("min-content");
-        stopButton.setHeight("90%");
-        stopButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
 
         stopButton.addClickListener(e -> {
             if (paused) {
@@ -412,7 +390,7 @@ public class PGS extends Composite<VerticalLayout> {
         return stopButton;
     }
 
-    private static void moveEvent(HorizontalLayout from, HorizontalLayout to, int j, String color, String size) {
+    public static void moveEvent(HorizontalLayout from, HorizontalLayout to, int j, String color, String size) {
         if ((from.getChildren().toList().size() < j + 1)) {
             return;
         }
@@ -584,15 +562,12 @@ public class PGS extends Composite<VerticalLayout> {
         });
     }
 
+    /*
     private Button ingestOneEvent(HorizontalLayout streamView, HorizontalLayout nextEventWindow, DataComponent snapshotGraphFunction, DataComponent snapshotGraphSolo, VerticalLayout outeroutputRow) {
 
-        Button nextEventButton = new Button();
-        nextEventButton.addClassName("special");
-        nextEventButton.setText("Next Event");
-        nextEventButton.setHeight("90%");
-        nextEventButton.setWidth("min-content");
-        nextEventButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        Button nextEventButton = new NextEventButton();
 
+        // TODO clickListener needs to be outsource to class (once done method can dessipate)
         nextEventButton.addClickListener(e -> {
 
             List<String> seraphQueries = seraphService.listQueries();
@@ -630,12 +605,11 @@ public class PGS extends Composite<VerticalLayout> {
         return nextEventButton;
     }
 
+     */
+
+    /*
     private Button startRuntimeIngestion(HorizontalLayout streamView, HorizontalLayout nextEventWindow) {
-        Button realTimeButton = new Button();
-        realTimeButton.setText("Real-Time");
-        realTimeButton.setWidth("min-content");
-        realTimeButton.setHeight("90%");
-        realTimeButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        Button realTimeButton = new RealTimeButton();
 
         realTimeButton.addClickListener(e -> {
             paused = !paused;
@@ -666,7 +640,9 @@ public class PGS extends Composite<VerticalLayout> {
         return realTimeButton;
     }
 
-    private Component loadEvent(HorizontalLayout eventView, Component event) {
+     */
+
+    public Component loadEvent(HorizontalLayout eventView, Component event) {
         Physics physics = new Physics();
         physics.setEnabled(true);
         physics.setSolver(Physics.Solver.repulsion);
@@ -684,6 +660,44 @@ public class PGS extends Composite<VerticalLayout> {
         Component event = SeraphService.loadEvent("testGraph1.json");
         event.getStyle().setWidth("90%").setHeight("90%");
         return loadEvent(eventView, event);
+    }
+
+    public SeraphService getSeraphService() {
+        return seraphService;
+    }
+    public String getInputStream(){
+        return inputStream;
+    }
+
+    public GraphDataComponent getsnapshotgraphfunction() {
+        return snapshotGraphFunction;
+    }
+
+    public GraphDataComponent getSnapshotGraphSolo(){
+        return snapshotGraphSolo;
+    }
+
+    public HorizontalLayout getStreamView() {
+        return streamView;
+    }
+    public HorizontalLayout getNextEventWindow(){
+        return nextEventWindow;
+    }
+
+    public AtomicInteger getEventCounter(){
+        return eventCounter;
+    }
+
+    public VerticalLayout getOutputRowContainer() {
+        return outputRowContainer;
+    }
+
+    public boolean getPaused() {
+        return paused;
+    }
+
+    public void setPaused(boolean paused) {
+        this.paused = paused;
     }
 
 }
