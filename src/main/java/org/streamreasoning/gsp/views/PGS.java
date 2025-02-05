@@ -35,6 +35,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.streamreasoning.gsp.data.GraphDataComponent;
 import org.streamreasoning.gsp.services.SeraphService;
 import org.streamreasoning.gsp.views.rows.ControlRow;
+import org.streamreasoning.gsp.views.rows.InputRow;
+import org.streamreasoning.gsp.views.rows.QueryRow;
 import org.vaadin.addons.visjs.network.main.Edge;
 import org.vaadin.addons.visjs.network.main.NetworkDiagram;
 import org.vaadin.addons.visjs.network.main.Node;
@@ -61,8 +63,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Uses(Icon.class)
 public class PGS extends Composite<VerticalLayout> {
 
-    static Random random = new Random();
-    static AtomicInteger idCounter = new AtomicInteger();
     static AtomicInteger eventCounter = new AtomicInteger();
     static boolean paused = true;
     static String inputStream = "http://stream1";
@@ -79,106 +79,59 @@ public class PGS extends Composite<VerticalLayout> {
 
     public PGS() {
 
+        // Setting up look of StreamView
+        initializeStreamView();
 
-        // This is the fucker that needs to be isolated
-        // that is the "inputRow"
-        HorizontalLayout inputRow = new HorizontalLayout();
-        this.streamView = new HorizontalLayout();
-        streamView.setHeight("100%");
-        streamView.setWidth("100%");
+        InputRow inputRow = new InputRow(this);
 
-        List<Node> placehodlerNodes = new LinkedList<>();
 
-        Node n1 = new Node("A");
-        n1.setColor("#f0f0f0");
-        Node n2 = new Node("B");
-        n2.setColor("#f0f0f0");
-
-        placehodlerNodes.add(n1);
-        placehodlerNodes.add(n2);
-
-        Edge ee = new Edge(n1, n2);
-        ee.setColor("black");
-
-        List<Edge> placehodlerEdges = new LinkedList<>();
-        placehodlerEdges.add(ee);
-
-        Layout layout = new Layout();
-        HierarchicalLayout h = new HierarchicalLayout();
-        h.setLayout(HierarchicalLayout.LayoutStyle.direction);
-        h.setDirection(HierarchicalLayout.Direction.UD);
-
-        // These are the two diagrams on the page
-        // They share the width, but have the entire height of the row
-        // It is the content within them that needs to be regulated
-
-        // This is the icon in the top left
-        final NetworkDiagram placeHolder1 = new NetworkDiagram(Options.builder().withWidth("50px").withHeight("100px").withLayout(layout).withInteraction(Interaction.builder().withMultiselect(true).build()).build());
-
-        // This is the icon in the top right
-        final NetworkDiagram placeHolder2 = new NetworkDiagram(Options.builder().withWidth("50px").withHeight("100px").withLayout(layout).withInteraction(Interaction.builder().withMultiselect(true).build()).build());
-
-        final var dataProvider1 = new ListDataProvider<Node>(placehodlerNodes);
-        final var edgeProvider1 = new ListDataProvider<Edge>(placehodlerEdges);
-
-        placeHolder1.setEdgesDataProvider(edgeProvider1);
-        placeHolder2.setEdgesDataProvider(edgeProvider1);
-        placeHolder1.setNodesDataProvider(dataProvider1);
-        placeHolder2.setNodesDataProvider(dataProvider1);
-
-        inputRow.add(placeHolder1);
-        streamView.getStyle().setBorder("dotted");
-        streamView.getStyle().set("border-color", "red");
-        streamView.setJustifyContentMode(FlexComponent.JustifyContentMode.START);
-
-        // I can't find documentation on this function "diagramfit"
-        placeHolder1.diagramFit();
-        placeHolder2.diagramFit();
-
-        streamView.getStyle().set("background-color", "#f0f0f0"); // Use your desired color code
-
-        inputRow.add(streamView);
-        inputRow.add(placeHolder2);
-
-        HorizontalLayout queryRow = new HorizontalLayout();
 
         this.nextEventWindow = new HorizontalLayout();
-        VerticalLayout outerNextEventWindow = new VerticalLayout();
-
-        // OuterNextWindow Seems to have the content of the window I want
-
-        outerNextEventWindow.setWidth("100%");
-        outerNextEventWindow.setHeight("100%");
         nextEventWindow.setHeight("90%");
         nextEventWindow.setWidth("90%");
 
+
+        // This is tab for Next Event window
+        VerticalLayout outerNextEventWindow = new VerticalLayout();
+        outerNextEventWindow.setWidth("100%");
+        outerNextEventWindow.setHeight("100%");
+
+
+        // This seems to be the tab sheet
         TabSheet processingTabSheet = new TabSheet();
         processingTabSheet.setWidth("80%");
         processingTabSheet.setHeight("100%");
 
         //Next Event
 
+        // This is the Dropdown menu to choose what stream you want
         ComboBox<String> select = new ComboBox<>();
         select.setLabel("From Stream");
         select.setItems("Bike Sharing", "Cyber Security", "Network Monitoring", "Basic", "New Stream");
         select.setValue("Basic");
 
+
+        // This popup window only happens when the "New Stream" option is chosen in the
+        // dropdown menu
         Popup popup = new Popup();
         popup.setFor("id-of-target-element");
         VerticalLayout popupContent = new VerticalLayout();
 
-        popupContent.add(new Span("Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Nullam at arcu a est sollicitudin euismod. Nunc tincidunt ante vitae massa. Et harum quidem rerum facilis est et expedita distinctio. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat."));
+        popupContent.add(new Span("Add you own text to the window."));
         popupContent.add(new HorizontalLayout(new Button("Action 1"), new Button("Action 2")));
-        popupContent.add(new Span("Lorem ipsum dolor sit amet. Donec ipsum massa, ullamcorper in, auctor et, scelerisque sed, est. Duis viverra diam non justo. Nulla est. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus."));
+        popupContent.add(new Span("Buttons are also customizable"));
         popupContent.setMaxWidth("25rem");
         popupContent.setMaxHeight("20rem");
         popup.add(popupContent);
+
+        // Adding the popup to the inputRow
         inputRow.add(popup);
 
         outerNextEventWindow.add(select);
         outerNextEventWindow.add(nextEventWindow);
 
-        Component eventGraph = loadEvent(nextEventWindow);
+        // Variable never used, out it goes
+        //Component eventGraph = loadEvent(nextEventWindow);
 
         processingTabSheet.add(new Tab("Next Event"), outerNextEventWindow);
 
@@ -213,7 +166,6 @@ public class PGS extends Composite<VerticalLayout> {
 
         Tab now = new Tab("Time-Varying Table");
 
-//        setGridSampleData(nowgrid);
 
         HorizontalLayout tvttab = new HorizontalLayout();
         tvttab.setWidth("100%");
@@ -235,8 +187,6 @@ public class PGS extends Composite<VerticalLayout> {
         queryingTab.addSelectedChangeListener((ComponentEventListener<TabSheet.SelectedChangeEvent>) event -> {
             snapshotGraphSolo.diagamRedraw();
             snapshotGraphFunction.diagamRedraw();
-//            eventGraph.diagamRedraw();
-//            eventGraph.diagramFit();
         });
 
         queryingTab.setWidth("60%");
@@ -253,10 +203,6 @@ public class PGS extends Composite<VerticalLayout> {
         nowgrid.setPageSize(10);
         nowgrid.getStyle().setFontSize("12px");
 
-//        Tab lastTATTab = new Tab("Last Time-Annotated Table");
-//        Grid<Result> lastTAT = new Grid<>(Result.class);
-
-//        setGridSampleData(lastTAT);
 
         processingTabSheet.add(now, tvttab);
         processingTabSheet.add(new Tab("Snapshot Graph"), snapshotGraphSolo);
@@ -329,7 +275,6 @@ public class PGS extends Composite<VerticalLayout> {
 
         addRegisteredQueries(queryingTab, outputRowContainer);
 
-        //Output Row
 
         //the result table should be generated based on binding plus the two validity columns
 
@@ -347,13 +292,14 @@ public class PGS extends Composite<VerticalLayout> {
         inputRow.setWidth("100%");
         inputRow.setHeight("10%");
 
-        queryRow.setWidthFull();
-        getContent().setFlexGrow(1.0, queryRow);
-        queryRow.addClassName(Gap.MEDIUM);
-        queryRow.setWidth("100%");
-        queryRow.setHeight("40%");
+        // Is query row also a potential one to move?
+        HorizontalLayout queryRow = new QueryRow(this);
 
-        getContent().setFlexGrow(1.0, controlRow);
+
+        queryRow.add(processingTabSheet);
+        queryRow.add(queryingTab);
+
+        //getContent().setFlexGrow(1.0, controlRow);
 
         outputRowContainer.setWidthFull();
         getContent().setFlexGrow(1.0, outputRowContainer);
@@ -365,12 +311,12 @@ public class PGS extends Composite<VerticalLayout> {
         getContent().add(inputRow);
         getContent().add(new Hr());
         getContent().add(queryRow);
-        queryRow.add(processingTabSheet);
-        queryRow.add(queryingTab);
+
+        // I wanna move these, query show be created else where
+
 
         getContent().add(new Hr());
         getContent().add(controlRow);
-//        rightControl.add(removeQuery);
         getContent().add(new Hr());
         getContent().add(outputRowContainer);
     }
@@ -400,8 +346,6 @@ public class PGS extends Composite<VerticalLayout> {
         componentAt.getStyle().setHeight(size);
         from.remove(componentAt);
         to.addComponentAsFirst(componentAt);
-//        componentAt.diagamRedraw();
-//        componentAt.diagramFit();
     }
 
     private static void addQueryPlan(TabSheet inputRow) {
@@ -441,70 +385,6 @@ public class PGS extends Composite<VerticalLayout> {
     }
 
     public static void setUpAce(AceEditor ace) {
-
-//
-//        ArrayList<String> custom = new ArrayList<String>();
-//        custom.add("REGISTER");
-//        custom.add("QUERY");
-//        custom.add("MATCH");
-//        custom.add("WHERE");
-//        custom.add("STARTING");
-//        custom.add("WITH");
-//        custom.add("WITHIN");
-//        custom.add("AT");
-//        custom.add("EMIT");
-//        custom.add("SNAPSHOT");
-//        custom.add("ON");
-//        custom.add("ENTERING");
-//        custom.add("EVERY");
-//        custom.add("EMIT");
-//
-//        AceCustomMode customMode = new AceCustomMode();
-
-//        AceCustomModeRule keywords = new AceCustomModeRule();
-//        keywords.setRegex("[a-zA-Z_$][a-zA-Z0-9_$]*\\b");
-//        keywords.setKeywordMapper(
-//                Map.of(
-//                        AceCustomModeTokens.KEYWORD, String.join("|", custom)
-//                ),
-//                AceCustomModeTokens.IDENTIFIER,
-//                true,
-//                "|"
-//        );
-
-
-//        ArrayList<String> fs = new ArrayList<String>();
-//        fs.add("allShortestPaths");
-
-//        AceCustomModeRule functions = new AceCustomModeRule();
-//        functions.setRegex("[a-z][a-zA-Z0-9]*\\b");
-//        functions.setKeywordMapper(
-//                Map.of(AceCustomModeTokens.VARIABLE, String.join("|", fs)),
-//                AceCustomModeTokens.VARIABLE,
-//                true,
-//                "|"
-//        );
-
-
-//        AceCustomModeRule lineComment = new AceCustomModeRule();
-//        lineComment.setRegex("--.*$");
-//        lineComment.setToken(AceCustomModeTokens.COMMENT);
-//
-//        AceCustomModeRule blockComment = new AceCustomModeRule();
-//        blockComment.setStart("/\\*");
-//        blockComment.setEnd("\\*/");
-//        blockComment.setToken(AceCustomModeTokens.COMMENT);
-//
-//        customMode.addState(
-//                "start",
-//                lineComment,
-//                blockComment,
-//                functions,
-//                keywords
-//        );
-
-//        ace.addCustomMode("cypher", customMode);
-//        ace.setCustomMode("cypher");
         ace.setMode(AceMode.sql);
     }
 
@@ -517,7 +397,6 @@ public class PGS extends Composite<VerticalLayout> {
 
         ListDataProvider<String> mapDP = new SeraphService.MyDataProvider<>(items);
         g.setDataProvider(mapDP);
-//                    g.addColumn(map -> ts).setHeader("Id");
         g.setId("Registered Queries");
 
         g.addColumn(map -> map).setHeader("QID");
@@ -562,85 +441,9 @@ public class PGS extends Composite<VerticalLayout> {
         });
     }
 
-    /*
-    private Button ingestOneEvent(HorizontalLayout streamView, HorizontalLayout nextEventWindow, DataComponent snapshotGraphFunction, DataComponent snapshotGraphSolo, VerticalLayout outeroutputRow) {
 
-        Button nextEventButton = new NextEventButton();
 
-        // TODO clickListener needs to be outsource to class (once done method can dessipate)
-        nextEventButton.addClickListener(e -> {
 
-            List<String> seraphQueries = seraphService.listQueries();
-
-            if (seraphQueries.isEmpty()) {
-                Notification.show("Register a query first!", 1000, Notification.Position.MIDDLE);
-                return;
-            }
-
-            eventCounter.compareAndSet(10, 0);
-
-            moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
-
-            Component pg = seraphService.sendEvent("testGraph", inputStream);
-            loadEvent(nextEventWindow, pg);
-
-            Notification.show("testGraph", 500, Notification.Position.BOTTOM_CENTER);
-
-            seraphQueries.forEach(q -> {
-                HorizontalLayout outputRow = (HorizontalLayout) outeroutputRow.getChildren().filter(c -> q.equals(c.getId().get())).findFirst().get();
-                if (outputRow.getComponentCount() > 5) {
-                    outputRow.remove(outputRow.getComponentAt(0));
-                }
-
-            });
-
-            if (streamView.getComponentCount() > 15) {
-                streamView.remove(streamView.getComponentAt(0));
-            }
-
-            snapshotGraphFunction.refreshAll();
-            snapshotGraphSolo.refreshAll();
-
-        });
-        return nextEventButton;
-    }
-
-     */
-
-    /*
-    private Button startRuntimeIngestion(HorizontalLayout streamView, HorizontalLayout nextEventWindow) {
-        Button realTimeButton = new RealTimeButton();
-
-        realTimeButton.addClickListener(e -> {
-            paused = !paused;
-            getUI().ifPresent(ui -> {
-                new Thread(() -> {
-                    while (!paused) {
-                        try {
-                            ui.access((Command) () -> {
-                                String s = "100%";
-                                Component pGraph3 = seraphService.sendEvent("testGraph", inputStream);
-                                pGraph3.getStyle().setWidth(s).setHeight(s);
-                                moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
-                                loadEvent(nextEventWindow, pGraph3);
-                            });
-
-                            Thread.sleep(1000);
-                        } catch (InterruptedException ex) {
-                            throw new RuntimeException(ex);
-                        }
-                    }
-                }).start();
-                Notification.show("Real Time Processing Started");
-            });
-
-            Notification.show("Real Time Processing Coulnd't Start");
-
-        });
-        return realTimeButton;
-    }
-
-     */
 
     public Component loadEvent(HorizontalLayout eventView, Component event) {
         Physics physics = new Physics();
@@ -650,8 +453,6 @@ public class PGS extends Composite<VerticalLayout> {
         repulsion.setNodeDistance(1000);
         physics.setRepulsion(repulsion);
         eventView.add(event);
-//        event.diagramFit();
-//        event.diagamRedraw();
         return event;
 
     }
@@ -661,6 +462,22 @@ public class PGS extends Composite<VerticalLayout> {
         event.getStyle().setWidth("90%").setHeight("90%");
         return loadEvent(eventView, event);
     }
+
+    public void initializeStreamView(){
+        // StreamView customization
+        this.streamView = new HorizontalLayout();
+
+        streamView.setHeight("100%");
+        streamView.setWidth("100%");
+        streamView.getStyle().setBorder("dotted");
+        streamView.getStyle().set("border-color", "red");
+        streamView.setJustifyContentMode(FlexComponent.JustifyContentMode.START);
+        streamView.getStyle().set("background-color", "#f0f0f0"); // Use your desired color code
+
+    }
+
+
+
 
     public SeraphService getSeraphService() {
         return seraphService;

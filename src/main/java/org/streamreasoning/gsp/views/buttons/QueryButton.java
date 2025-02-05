@@ -7,6 +7,11 @@ package org.streamreasoning.gsp.views.buttons;
 import com.vaadin.flow.component.ClickEvent;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.tabs.TabSheet;
+import com.vaadin.flow.component.timepicker.TimePicker;
+import de.f0rce.ace.AceEditor;
 import org.streamreasoning.gsp.services.SeraphService;
 import org.streamreasoning.gsp.views.PGS;
 
@@ -14,7 +19,7 @@ import org.streamreasoning.gsp.views.PGS;
 public class QueryButton extends Button {
 
 
-    public QueryButton(PGS pgs) {
+    public QueryButton(PGS pgs, HorizontalLayout tvttab, TimePicker timePicker1, TabSheet processingTabSheet, AceEditor editor, VerticalLayout outputRowContainer) {
 
         // The properties of the sendQueryButton
         this.setText("Register Query");
@@ -23,15 +28,13 @@ public class QueryButton extends Button {
         this.setWidth("min-content");
         this.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
 
-        this.addClickListener(this::registerQuery);
+        this.addClickListener(e-> registerQuery(e,pgs, tvttab,  timePicker1,  processingTabSheet,  editor, outputRowContainer ));
 
     }
 
-    public void registerQuery(ClickEvent click) {
+    public void registerQuery(ClickEvent click,PGS pgs, HorizontalLayout tvttab, TimePicker timePicker1, TabSheet processingTabSheet, AceEditor editor,VerticalLayout outputRowContainer) {
 
-        //TODO add the register query method here (missing the necessary variables at the moment)
-
-        //seraphService.registerNewQuery(inputStream, snapshotGraphFunction, snapshotGraphSolo, tvttab, timePicker1, processingTabSheet, editor, outputRowContainer));
+        pgs.getSeraphService().registerNewQuery(pgs.getInputStream(), pgs.getsnapshotgraphfunction(), pgs.getSnapshotGraphSolo(), tvttab, timePicker1, processingTabSheet, editor, outputRowContainer);
 
     }
 
