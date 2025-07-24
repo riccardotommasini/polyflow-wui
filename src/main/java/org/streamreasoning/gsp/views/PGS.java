@@ -77,7 +77,6 @@ public class PGS extends Composite<VerticalLayout> {
         HorizontalLayout inputRow = new HorizontalLayout();
         HorizontalLayout streamView = new HorizontalLayout();
         streamView.setHeight("100%");
-        streamView.setWidth("100%");
 
         List<Node> placehodlerNodes = new LinkedList<>();
 
@@ -100,9 +99,8 @@ public class PGS extends Composite<VerticalLayout> {
         h.setLayout(HierarchicalLayout.LayoutStyle.direction);
         h.setDirection(HierarchicalLayout.Direction.UD);
 
-        final NetworkDiagram placeHolder1 = new NetworkDiagram(Options.builder().withWidth("50px").withHeight("100px").withLayout(layout).withInteraction(Interaction.builder().withMultiselect(true).build()).build());
-
-        final NetworkDiagram placeHolder2 = new NetworkDiagram(Options.builder().withWidth("50px").withHeight("100px").withLayout(layout).withInteraction(Interaction.builder().withMultiselect(true).build()).build());
+        final NetworkDiagram placeHolder1 = new NetworkDiagram(Options.builder().withWidth("50px").withHeight("100%").withLayout(layout).withInteraction(Interaction.builder().withMultiselect(true).build()).build());
+        final NetworkDiagram placeHolder2 = new NetworkDiagram(Options.builder().withWidth("50px").withHeight("100%").withLayout(layout).withInteraction(Interaction.builder().withMultiselect(true).build()).build());
 
         final var dataProvider1 = new ListDataProvider<Node>(placehodlerNodes);
         final var edgeProvider1 = new ListDataProvider<Edge>(placehodlerEdges);
@@ -115,7 +113,10 @@ public class PGS extends Composite<VerticalLayout> {
         inputRow.add(placeHolder1);
         streamView.getStyle().setBorder("dotted");
         streamView.getStyle().set("border-color", "red");
+        streamView.getStyle().set("overflow-x", "auto");
         streamView.setJustifyContentMode(FlexComponent.JustifyContentMode.START);
+        streamView.getStyle().set("margin-left", "20px");
+        streamView.getStyle().set("margin-right", "20px");
 
         placeHolder1.diagramFit();
         placeHolder2.diagramFit();
@@ -123,6 +124,7 @@ public class PGS extends Composite<VerticalLayout> {
         streamView.getStyle().set("background-color", "#f0f0f0"); // Use your desired color code
 
         inputRow.add(streamView);
+        inputRow.setFlexGrow(1.0, streamView);
         inputRow.add(placeHolder2);
 
         HorizontalLayout queryRow = new HorizontalLayout();
@@ -180,7 +182,6 @@ public class PGS extends Composite<VerticalLayout> {
         Repulsion repulsion = new Repulsion();
         repulsion.setNodeDistance(100);
         physics.setRepulsion(repulsion);
-
 
         final var dataProvider = new ListDataProvider<Node>(nodes);
         final var edgeProvider = new ListDataProvider<Edge>(edges);
@@ -343,9 +344,8 @@ public class PGS extends Composite<VerticalLayout> {
         getContent().getStyle().set("flex-grow", "1");
         inputRow.setWidthFull();
         getContent().setFlexGrow(1.0, inputRow);
-        inputRow.addClassName(Gap.MEDIUM);
-        inputRow.setWidth("100%");
-        inputRow.setHeight("10%");
+        inputRow.setHeight("100px");
+        inputRow.setSpacing(false);
 
         queryRow.setWidthFull();
         getContent().setFlexGrow(1.0, queryRow);
@@ -419,7 +419,8 @@ public class PGS extends Composite<VerticalLayout> {
         Component componentAt = from.getComponentAt(j);
         componentAt.getStyle().set("background-color", color);
         componentAt.getStyle().setWidth(size);
-        componentAt.getStyle().setHeight(size);
+        componentAt.getStyle().setHeight("100%");
+        componentAt.getStyle().set("flex-shrink", "0");
         from.remove(componentAt);
         to.addComponentAsFirst(componentAt);
 //        componentAt.diagamRedraw();
@@ -464,7 +465,7 @@ public class PGS extends Composite<VerticalLayout> {
 
     public static void setUpAce(AceEditor ace) {
 
-//
+        //
 //        ArrayList<String> custom = new ArrayList<String>();
 //        custom.add("REGISTER");
 //        custom.add("QUERY");
@@ -480,7 +481,7 @@ public class PGS extends Composite<VerticalLayout> {
 //        custom.add("ENTERING");
 //        custom.add("EVERY");
 //        custom.add("EMIT");
-//
+        //
 //        AceCustomMode customMode = new AceCustomMode();
 
 //        AceCustomModeRule keywords = new AceCustomModeRule();
@@ -511,12 +512,12 @@ public class PGS extends Composite<VerticalLayout> {
 //        AceCustomModeRule lineComment = new AceCustomModeRule();
 //        lineComment.setRegex("--.*$");
 //        lineComment.setToken(AceCustomModeTokens.COMMENT);
-//
+        //
 //        AceCustomModeRule blockComment = new AceCustomModeRule();
 //        blockComment.setStart("/\\*");
 //        blockComment.setEnd("\\*/");
 //        blockComment.setToken(AceCustomModeTokens.COMMENT);
-//
+        //
 //        customMode.addState(
 //                "start",
 //                lineComment,
@@ -619,9 +620,9 @@ public class PGS extends Composite<VerticalLayout> {
 
             });
 
-            if (streamView.getComponentCount() > 15) {
-                streamView.remove(streamView.getComponentAt(0));
-            }
+            // if (streamView.getComponentCount() > 15) {
+            //     streamView.remove(streamView.getComponentAt(0));
+            // }
 
             snapshotGraphFunction.refreshAll();
             snapshotGraphSolo.refreshAll();

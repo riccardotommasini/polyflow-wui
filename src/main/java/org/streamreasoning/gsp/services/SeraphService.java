@@ -1,6 +1,7 @@
 package org.streamreasoning.gsp.services;
 
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.Html;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
 import com.vaadin.flow.component.html.H4;
@@ -31,6 +32,7 @@ import org.vaadin.addons.visjs.network.options.edges.ArrowHead;
 import org.vaadin.addons.visjs.network.options.edges.Arrows;
 import org.vaadin.addons.visjs.network.options.physics.Physics;
 import org.vaadin.addons.visjs.network.options.physics.Repulsion;
+import elemental.json.JsonArray;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -93,7 +95,7 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
                     edge.setLabel(e.labels()[0] + "\n" +
                                   "user_id:" + e.property("user_id") + "\n" +
                                   "val_time:" + e.property("val_time") + "\n" + "");
-
+                    edge.setId(e.from() + "_to_" + e.to());
                     return edge;
                 })
                 .map(edge -> {
@@ -121,9 +123,43 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
         });
 
         event.addSelectListener(click -> {
-            Notification.show("The event timestamp is [" +
-                              event.timestamp +
-                              "]");
+            JsonArray nodesArray = click.getParams().getArray("nodes");
+            JsonArray edgesArray = click.getParams().getArray("edges");
+
+            StringBuilder message = new StringBuilder("The event timestamp is [" + event.timestamp + "]");
+
+            // Handle nodes
+            if (nodesArray.length() > 0) {
+                String nodeIdFromJson = nodesArray.getString(0);
+                Node tmp = nodes.stream()
+                    .filter(node -> node.getId().equals(nodeIdFromJson))
+                    .findFirst()
+                    .orElse(null);
+                if (tmp != null) {
+                    message.append("<br>").append(tmp.getLabel().replace("\n", " "));
+                }
+            }
+
+            // Handle edges
+            if (edgesArray.length() > 0) {
+                String edgeIdFromJson = edgesArray.getString(0);
+                Edge tmpEdge = edges.stream() 
+                    .filter(edge -> edge.getId().equals(edgeIdFromJson))
+                    .findFirst()
+                    .orElse(null);
+                if (tmpEdge != null) {
+                    message.append("<br>").append(tmpEdge.getLabel().replace("\n", "<br>"));
+                }
+            }
+
+            // Only show notification if we found at least one node or edge
+            if (nodesArray.length() > 0 || edgesArray.length() > 0) {
+                Notification notification = new Notification();
+                Html htmlContent = new Html("<div>" + message.toString() + "</div>");
+                notification.add(htmlContent);
+                notification.setDuration(5000);
+                notification.open();
+            }
         });
 
         return event;
