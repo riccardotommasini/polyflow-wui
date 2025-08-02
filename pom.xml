@@ -51,6 +51,11 @@
 
     <dependencies>
         <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>2.2</version>
+        </dependency>
+        <dependency>
             <groupId>org.vaadin.addons.componentfactory</groupId>
             <artifactId>vcf-timeline</artifactId>
             <version>1.0.2</version>

@@ -31,6 +31,8 @@ import de.f0rce.ace.enums.AceMode;
 import de.f0rce.ace.enums.AceTheme;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.streamreasoning.gsp.data.GraphDataComponent;
+import org.streamreasoning.gsp.config.QueryConfig;
+import org.streamreasoning.gsp.config.QueryConfigLoader;
 import org.streamreasoning.gsp.services.DataComponent;
 import org.streamreasoning.gsp.services.SeraphService;
 import org.streamreasoning.gsp.views.modular.InputRow;
@@ -51,20 +53,17 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @PageTitle("Seraph")
 @Route(value = "/pgsmod", layout = MainLayout.class)
 @Uses(Icon.class)
 public class PGSModular extends Composite<VerticalLayout> {
-
-    static Random random = new Random();
-    static AtomicInteger idCounter = new AtomicInteger();
     static AtomicInteger eventCounter = new AtomicInteger();
     static boolean paused = true;
     static String inputStream = "http://stream1";
     private String labels = "Bike;Station";
+    QueryConfig config = QueryConfigLoader.load("queries-config.yaml");
 
     @Autowired
     private SeraphService seraphService;
@@ -93,8 +92,8 @@ public class PGSModular extends Composite<VerticalLayout> {
         //Next Event
         ComboBox<String> select = new ComboBox<>();
         select.setLabel("From Stream");
-        select.setItems("Bike Sharing", "Cyber Security", "Network Monitoring", "Basic", "New Stream");
-        select.setValue("Basic");
+        select.setItems(config.getAllQueryNames());
+        select.setValue(config.getDefaultQueryName());
 
         VerticalLayout outerNextEvent = new VerticalLayout();
         outerNextEvent.add(select);
@@ -133,8 +132,7 @@ public class PGSModular extends Composite<VerticalLayout> {
         ModularTabSheet.SmartTab[] queryingTabs = queryingTabSheet.initialise(3);
 
         AceEditor editor = new AceEditor();
-        editor.setValue("REGISTER QUERY simple_query STARTING AT NOW {\n" + "MATCH (b:Bike)-[r]->(s:Station)\n" + "WITHIN PT10S\n" + "EMIT b.bike_id as source, type(r) as edge, s.station_id as dest\n" + "ON ENTERING\n" + "EVERY PT5S\n" + "}");
-
+        editor.setValue(config.getDefaultQuery().getQuery_template());
 
         HorizontalLayout trash = new HorizontalLayout();
 
@@ -144,38 +142,14 @@ public class PGSModular extends Composite<VerticalLayout> {
             moveEvent(nextEventWindow, trash, 0, "#f0f0f0", "120px");
             trash.removeAll();
             //TODO here we need to make it load from a folder of use-cases, consider moving the switch case on the service side
-            switch (event.getValue()) {
-                case "Bike Sharing":
-                    labels = "Bike;Station";
-                    inputStream = "http://stream1";
-                    editor.setValue("REGISTER QUERY student_trick STARTING AT NOW {\n" + "MATCH (:Bike)-[r:rentedAt]->(s:Station),\n" + "q = (b)-[:returnedAt|rentedAt*3..]-(o:Station)\n" + "WITHIN PT1H\n" + "WITH r, s, q, relationships(q) AS rels,\n" + "[n IN nodes(q) WHERE 'Station' IN labels(n) | n.id] AS hs\n" + "WHERE ALL(e IN rels WHERE e.user_id = r.user_id AND e.\n" + "val_time > r.val_time AND e.duration < 20 )\n" + "EMIT r.user_id, s.id, r.val_time, hs\n" + "ON ENTERING EVERY PT5M }");
-                    ig = seraphService.sendEvent("testGraph", inputStream);
-                    loadEvent(nextEventWindow);
-                    break;
-                case "Cyber Security":
-                    labels = "Router;Switch";
-                    inputStream = "http://stream2";
-                    editor.setValue("REGISTER QUERY watch_for_suspects STARTING AT NOW {\n" + "MATCH (c:Event)-[:OCCURRED_AT]->(l:Location)\n" + "WITHIN PT15M\n" + "WITH c, point(l) AS crime_scene\n" + "MATCH (crime:Event)<-[:PARTY_TO]-(p:Suspect)-[:NEAR_TO]->(curr:Location)\n" + "WITHIN PT15M\n" + "WITH c, crime, p, curr,\n" + "distance(point(curr), crime_scene) AS distance\n" + "WHERE distance < 3000 AND c.type=crime.type\n" + "EMIT person, curr, c.description\n" + "SNAPSHOT EVERY PT5M " + "}");
-                    ig = seraphService.sendEvent("cyberTest", inputStream);
-                    loadEvent(nextEventWindow);
-                    break;
-                case "Network Monitoring":
-                    labels = "Event:Person";
-                    inputStream = "http://stream3";
-                    editor.setValue("" + "REGISTER QUERY anomalous_routes STARTING AT NOW {\n" + "MATCH path = allShortestPaths(\n" + "(rack:Rack)-[:HOLDS|ROUTES|CONNECTS*]-(r:Router:Egress))\n" + "WITHIN PT10M\n" + "WITH rack, avg(length(path)) as 10minAvg, path\n" + "WHERE (10minAvg - 5 / 0.5) >= 3\n" + "EMIT path\n" + "SNAPSHOT EVERY PT1M " + "}" + "");
-                    ig = seraphService.sendEvent("cyberTest1", inputStream);
-                    loadEvent(nextEventWindow);
-                    break;
-                case "Basic":
-                    labels = "Bike;Station";
-                    inputStream = "http://stream1";
-                    editor.setValue("REGISTER QUERY <student_trick> STARTING AT NOW {\n" + "MATCH (b:Bike)-[r]->(s:Station)\n" + "WITHIN PT10S\n" + "EMIT b.bike_id as source, type(r) as edge, s.station_id as dest\n" + "ON ENTERING\n" + "EVERY PT5S\n" + "}");
-                    ig = seraphService.sendEvent("testGraph", inputStream);
-                    loadEvent(nextEventWindow);
-                    break;
-                default:
-                    Notification.show("already broken");
-            }
+
+            QueryConfig.QueryDefinition queryByName = config.getQueryByName(event.getValue());
+            if (queryByName != null) {
+                editor.setValue(queryByName.getQuery_template());
+                seraphService.sendEvent("testGraph", queryByName.getInput_stream());
+                loadEvent(nextEventWindow);
+            } else Notification.show("Selected Stream [" + event.getValue() + "] does not have a corresponding query");
+
         });
 
 //
@@ -317,7 +291,7 @@ public class PGSModular extends Composite<VerticalLayout> {
 
         operationRow.add(queryingTabSheet);
         queryingTabs[0].add("Query Editor", editor);
-        queryingTabs[1].add("Query Plan", addQueryPlan(queryingTabSheet));
+        queryingTabs[1].add("Query Plan", queryPlanPlaceHolder());
         queryingTabs[2].add("Queries", registeredQueries);
 
         getContent().add(new Hr());
@@ -361,7 +335,7 @@ public class PGSModular extends Composite<VerticalLayout> {
 //        componentAt.diagramFit();
     }
 
-    private static NetworkDiagram addQueryPlan(TabSheet inputRow) {
+    private static NetworkDiagram queryPlanPlaceHolder() {
         final NetworkDiagram plan = new NetworkDiagram(Options.builder().withWidth("100%").withHeight("100%").build());
         final List<Node> nodes = new LinkedList<>();
         final List<Edge> edges = new LinkedList<>();

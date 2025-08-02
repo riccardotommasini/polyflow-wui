@@ -1,0 +1,61 @@
+defaultQueryName: "Basic"
+
+queries:
+  Bike Sharing:
+    input_stream: "http://stream1"
+    labels: ["Bike", "Station"]
+    query_template: |
+      REGISTER QUERY student_trick STARTING AT NOW {
+        MATCH (:Bike)-[r:rentedAt]->(s:Station),
+              q = (b)-[:returnedAt|rentedAt*3..]-(o:Station)
+        WITHIN PT1H
+        WITH r, s, q, relationships(q) AS rels,
+             [n IN nodes(q) WHERE 'Station' IN labels(n) | n.id] AS hs
+        WHERE ALL(e IN rels WHERE e.user_id = r.user_id AND
+                  e.val_time > r.val_time AND e.duration < 20 )
+        EMIT r.user_id, s.id, r.val_time, hs
+        ON ENTERING EVERY PT5M
+      }
+
+  Cyber Security:
+    input_stream: "http://stream2"
+    labels: ["Router", "Switch"]
+    query_template: |
+      REGISTER QUERY watch_for_suspects STARTING AT NOW {
+        MATCH (c:Event)-[:OCCURRED_AT]->(l:Location)
+        WITHIN PT15M
+        WITH c, point(l) AS crime_scene
+        MATCH (crime:Event)<-[:PARTY_TO]-(p:Suspect)-[:NEAR_TO]->(curr:Location)
+        WITHIN PT15M
+        WITH c, crime, p, curr,
+             distance(point(curr), crime_scene) AS distance
+        WHERE distance < 3000 AND c.type = crime.type
+        EMIT person, curr, c.description
+        SNAPSHOT EVERY PT5M
+      }
+
+  Network Monitoring:
+    input_stream: "http://stream3"
+    labels: ["Event", "Person"]
+    query_template: |
+      REGISTER QUERY anomalous_routes STARTING AT NOW {
+        MATCH path = allShortestPaths(
+          (rack:Rack)-[:HOLDS|ROUTES|CONNECTS*]-(r:Router:Egress))
+        WITHIN PT10M
+        WITH rack, avg(length(path)) AS 10minAvg, path
+        WHERE (10minAvg - 5 / 0.5) >= 3
+        EMIT path
+        SNAPSHOT EVERY PT1M
+      }
+
+  Basic:
+    input_stream: "http://stream1"
+    labels: ["Bike", "Station"]
+    query_template: |
+      REGISTER QUERY student_trick STARTING AT NOW {
+        MATCH (b:Bike)-[r]->(s:Station)
+        WITHIN PT10S
+        EMIT b.bike_id AS source, type(r) AS edge, s.station_id AS dest
+        ON ENTERING
+        EVERY PT5S
+      }
