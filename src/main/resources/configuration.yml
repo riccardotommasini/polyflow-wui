@@ -1,0 +1,37 @@
+vaadin-theme:
+  name: "my-custom-theme"
+  base-theme: "lumo"  # or 'material'
+  dark-mode: false
+
+  colors:
+    primary-color: "#0066cc"
+    error-color: "#b00020"
+    success-color: "#2e7d32"
+    background-color: "#ffffff"
+    text-color: "#212121"
+
+  typography:
+    font-family: "Roboto, sans-serif"
+    font-size: "14px"
+    line-height: "1.6"
+
+  components:
+    button:
+      background: "var(--lumo-primary-color)"
+      color: "#ffffff"
+      border-radius: "8px"
+      font-weight: "600"
+      padding: "0.5em 1em"
+    text-field:
+      border: "1px solid #ccc"
+      border-radius: "4px"
+      padding: "0.5em"
+      background: "#f9f9f9"
+    dialog:
+      overlay-background: "rgba(0, 0, 0, 0.5)"
+      border-radius: "10px"
+      padding: "1.5em"
+
+  custom-properties:
+    --my-custom-spacing: "12px"
+    --my-heading-font: "Oswald, sans-serif"
