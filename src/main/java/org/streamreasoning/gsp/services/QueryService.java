@@ -11,7 +11,13 @@ import de.f0rce.ace.AceEditor;
 import graph.ContinuousQuery;
 import org.streamreasoning.polyflow.api.processing.ContinuousProgram;
 import org.streamreasoning.polyflow.api.stream.data.DataStream;
+import org.vaadin.addons.visjs.network.main.Edge;
 import org.vaadin.addons.visjs.network.main.NetworkDiagram;
+import org.vaadin.addons.visjs.network.main.Node;
+import org.vaadin.addons.visjs.network.options.Options;
+import org.vaadin.addons.visjs.network.options.edges.ArrowHead;
+import org.vaadin.addons.visjs.network.options.edges.Arrows;
+import org.vaadin.addons.visjs.network.util.Shape;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +33,7 @@ public abstract class QueryService<I, W, R extends Iterable<?>, O> {
     protected Tab lastTATTab = new Tab("Last Time-Annotated Table");
     protected final AtomicInteger eventCounter = new AtomicInteger(1);
     protected final AtomicInteger idCounter = new AtomicInteger(1);
+    protected final AtomicInteger WID = new AtomicInteger(1);
 
     protected QueryService(ContinuousProgram<I, W, R, O> cp) {
         this.cp = cp;
@@ -43,11 +50,45 @@ public abstract class QueryService<I, W, R extends Iterable<?>, O> {
     }
 
     public List<String> listQueries() {
-        return queries.values().stream().map(ContinuousQuery::id).toList();
+        return queries.keySet().stream().toList();
     }
 
-    public List<String> getResultVars(String map) {
-        return queries.get(map).getResultVars();
+    public List<String> getResultVars(String q) {
+        return queries.get(q).getResultVars();
+    }
+
+    public NetworkDiagram getQueryPlan(String seraphQuery) {
+        final NetworkDiagram plan = new NetworkDiagram(Options.builder().withWidth("100%").withHeight("100%").build());
+        final List<Node> nodes = new LinkedList<>();
+        final List<Edge> edges = new LinkedList<>();
+        AtomicInteger idCounter = new AtomicInteger();
+
+        Node e = new Node("0", "ProduceResults ");
+        e.setShape(Shape.square);
+        nodes.add(e);
+
+        Node e1 = new Node("1", "Filter ");
+        e1.setShape(Shape.square);
+
+        nodes.add(e1);
+        Node e2 = new Node("2", "DirectedRelationshipTypeScan ");
+        e2.setShape(Shape.square);
+        nodes.add(e2);
+
+        Edge e3 = new Edge("0", "1");
+        e3.setArrows(new Arrows(new ArrowHead()));
+        edges.add(e3);
+        Edge e4 = new Edge("1", "2");
+        e4.setArrows(new Arrows(new ArrowHead()));
+        edges.add(e4);
+
+        final var dataProvider = new ListDataProvider<Node>(nodes);
+        final var edgeProvider = new ListDataProvider<Edge>(edges);
+
+        plan.setNodesDataProvider(dataProvider);
+        plan.setEdgesDataProvider(edgeProvider);
+
+        return plan;
     }
 
     public static class MyDataProvider<T> extends ListDataProvider<T> {

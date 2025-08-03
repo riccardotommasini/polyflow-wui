@@ -3,11 +3,14 @@ package org.streamreasoning.gsp.services;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.Html;
 import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.grid.GridSortOrder;
+import com.vaadin.flow.component.grid.GridSortOrderBuilder;
 import com.vaadin.flow.component.grid.GridVariant;
 import com.vaadin.flow.component.html.H4;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.tabs.Tab;
 import com.vaadin.flow.component.tabs.TabSheet;
 import com.vaadin.flow.component.timepicker.TimePicker;
 import com.vaadin.flow.data.provider.ListDataProvider;
@@ -22,6 +25,7 @@ import graph.seraph.events.Result;
 import graph.seraph.syntax.SeraphQueryFactory;
 import org.springframework.stereotype.Service;
 import org.streamreasoning.gsp.data.InputGraph;
+import org.streamreasoning.gsp.views.modular.ModularTabSheet;
 import org.streamreasoning.polyflow.api.processing.Task;
 import org.streamreasoning.polyflow.api.sds.SDS;
 import org.streamreasoning.polyflow.api.stream.data.DataStream;
@@ -76,7 +80,7 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
 
         final InputGraph event =
                 new InputGraph(Options.builder()
-                        //.withWidth(percentage).withHeight(percentage)
+                        .withWidth("100%").withHeight("100%")
                         .withAutoResize(true)
 //                        .withLayout(layout)
                         .withPhysics(physics)
@@ -190,7 +194,7 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
     }
 
     public void registerNewQuery(String inputStream, DataComponent snapshotGraphFunction, DataComponent snapshotGraphSolo, HorizontalLayout tvttab, TimePicker timePicker1, TabSheet processingTabSheet, AceEditor editor, VerticalLayout outputRowContainer) {
-//todo if processingTabSheet contains already, ti should not recreate it.
+        //todo if processingTabSheet contains already, ti should not recreate it.
         Grid<Result> lastTAT;
         Component component = processingTabSheet.getComponent(lastTATTab);
         if (component == null) {
@@ -214,7 +218,7 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
 
         String cqe = register(editor.getValue(), inputStream);
 
-        HorizontalLayout outputRow = new HorizontalLayout();
+        VerticalLayout outputRow = new VerticalLayout();
         String id = cqe; //TODO nel task
         outputRow.setId(id);
         outputRow.addClassName(LumoUtility.Gap.MEDIUM);
@@ -257,7 +261,6 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
             nowgrid.getColumnByKey("empty").setVisible(false);
 
             res.add(result);
-
             resultDataProvider.refreshAll();
 
             //TODO add focus based on selected query
@@ -265,6 +268,117 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
 
             updateSnapshotGraphFromContent(snapshotGraphFunction, queries.get(id).getTask().getSDS());
             updateSnapshotGraphFromContent(snapshotGraphSolo, queries.get(id).getTask().getSDS());
+            timePicker1.setValue(LocalTime.ofInstant(Instant.ofEpochMilli(ts), ZoneId.systemDefault()));
+            System.out.println(result);
+        });
+
+        Notification.show("Query " + cqe + " Was successfully registered");
+    }
+
+    public void registerNewQuery2(String inputStream, DataComponent snapshotGraphFunction, DataComponent snapshotGraphSolo, HorizontalLayout tvttab, TimePicker timePicker1, TabSheet processingTabSheet, AceEditor editor, ModularTabSheet outputRowContainer) {
+        //todo if processingTabSheet contains already, ti should not recreate it.
+        Grid<Result> lastTAT;
+        Component component = processingTabSheet.getComponent(lastTATTab);
+        if (component == null) {
+            processingTabSheet.add(lastTATTab, lastTAT = new Grid<>(Result.class));
+            lastTAT.setId("lastTAT");
+            lastTAT.setWidth("100%");
+            lastTAT.setHeight("100%");
+            lastTAT.setPageSize(10);
+            lastTAT.getStyle().setFontSize("1em");
+        } else
+            lastTAT = (Grid<Result>) component;
+
+        Grid<Result> nowgrid;
+        tvttab.replace(tvttab.getChildren().toList().get(2), nowgrid = new Grid<>(Result.class));
+
+        nowgrid.setId("nowgrid");
+        nowgrid.setWidth("100%");
+        nowgrid.setHeight("100%");
+        nowgrid.setPageSize(10);
+        nowgrid.getStyle().setFontSize("12px");
+
+        String cqe = register(editor.getValue(), inputStream);
+
+        Grid<Result> queryResult = new Grid<>(Result.class);
+        queryResult.setId(cqe);
+        queryResult.addClassName(LumoUtility.Gap.MEDIUM);
+        queryResult.setWidthFull();
+        queryResult.setHeightFull();
+        outputRowContainer.add(new Tab(cqe), queryResult);
+
+        //todo to test
+        Grid<Result> queryResult2 = new Grid<>(Result.class);
+        queryResult.setId(cqe + "2");
+        queryResult.addClassName(LumoUtility.Gap.MEDIUM);
+        queryResult.setWidthFull();
+        queryResult.setHeightFull();
+        outputRowContainer.add(new Tab(cqe + "2"), queryResult2);
+
+        List<Result> items = new ArrayList<>();
+        MyDataProvider<Result> mapDP = new MyDataProvider<>(items);
+        queryResult.setDataProvider(mapDP);
+        queryResult2.setDataProvider(mapDP); //todo to test
+
+        List<Result> res = new ArrayList<>();
+        ListDataProvider<Result> resultDataProvider = new MyDataProvider<>(res);
+
+        lastTAT.setDataProvider(resultDataProvider);
+        nowgrid.setDataProvider(resultDataProvider);
+
+        queries.get(cqe).getResultVars().forEach(k -> {
+            lastTAT.addColumn(map -> map.get(k)).setHeader(k);
+            nowgrid.addColumn(map -> map.get(k)).setHeader(k);
+            queryResult.addColumn(map -> map.get(k)).setHeader(k);
+        });
+
+        queryResult.getColumnByKey("empty").setVisible(false);
+        lastTAT.getColumnByKey("empty").setVisible(false);
+        nowgrid.getColumnByKey("empty").setVisible(false);
+
+        queryResult.addColumn(map -> map.get("Id")).setHeader("Id");
+        lastTAT.addColumn(map -> map.get("Id")).setHeader("Id");
+        nowgrid.addColumn(map -> map.get("Id")).setHeader("Id");
+
+        Grid.Column<Result> ts1 = queryResult.addColumn(map -> map.get("ts"));
+        ts1.setHeader("ts").setSortable(true);
+        List<GridSortOrder<Result>> order = new GridSortOrderBuilder<Result>()
+                .thenDesc(ts1)
+                .build();
+        queryResult.sort(order);
+
+        queryResult.addColumn(map -> map.get("win_start")).setHeader("win_start");
+        lastTAT.addColumn(map -> map.get("win_start")).setHeader("win_start");
+        nowgrid.addColumn(map -> map.get("win_start")).setHeader("win_start");
+
+        queryResult.addColumn(map -> map.get("win_end")).setHeader("win_end");
+        lastTAT.addColumn(map -> map.get("win_end")).setHeader("win_end");
+        nowgrid.addColumn(map -> map.get("win_end")).setHeader("win_end");
+
+        lastTAT.getColumnByKey("empty").setVisible(false);
+        nowgrid.getColumnByKey("empty").setVisible(false);
+        queryResult.getColumnByKey("empty").setVisible(false);
+
+
+//        addConsumer(id, lastTAT, nowgrid, res, resultDataProvider, timePicker1, queryResult, snapshotGraphFunction, snapshotGraphSolo, nodes, edges);
+
+        queries.get(cqe).outstream().addConsumer((out, result, ts) -> {
+            result.put("Id", idCounter.getAndIncrement());
+            result.put("ts", ts);
+
+            if (res.size() != 0 && !res.get(res.size() - 1).get("ts").equals(ts)) {
+                res.clear();
+            }
+            //state table
+            resultDataProvider.getItems().add(result);
+            resultDataProvider.refreshAll();
+
+            //output row
+            mapDP.getItems().add(result);
+            mapDP.refreshAll();
+
+            updateSnapshotGraphFromContent(snapshotGraphFunction, queries.get(cqe).getTask().getSDS());
+            updateSnapshotGraphFromContent(snapshotGraphSolo, queries.get(cqe).getTask().getSDS());
             timePicker1.setValue(LocalTime.ofInstant(Instant.ofEpochMilli(ts), ZoneId.systemDefault()));
             System.out.println(result);
         });
@@ -352,7 +466,7 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
 
     }
 
-    private void appendResultTable(HorizontalLayout outputRow, Result arg, long ts, List<Result> res) {
+    private void appendResultTable(VerticalLayout outputRow, Result arg, long ts, List<Result> res) {
         outputRow.getChildren()
                 .filter(component -> !(component instanceof H4))
                 .map(obj -> (Grid) obj)

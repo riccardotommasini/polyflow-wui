@@ -8,24 +8,18 @@ public class ModularTabSheet extends TabSheet {
 
 
     public SmartTab[] initialise(int tabs) {
-
         SmartTab[] ts = new SmartTab[tabs];
-
         for (int i = 0; i < tabs; i++) {
             ts[i] = new SmartTab("Tab " + i);
         }
-
         return ts;
     }
 
     public SmartTab[] initialise(String[] tabs) {
-
         SmartTab[] ts = new SmartTab[tabs.length];
-
         for (int i = 0; i < tabs.length; i++) {
             ts[i] = new SmartTab(tabs[i]);
         }
-
         return ts;
     }
 

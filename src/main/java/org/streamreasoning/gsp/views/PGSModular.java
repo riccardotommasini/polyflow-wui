@@ -1,9 +1,5 @@
 package org.streamreasoning.gsp.views;
 
-import com.vaadin.componentfactory.Popup;
-import com.vaadin.componentfactory.PopupAlignment;
-import com.vaadin.componentfactory.PopupPosition;
-import com.vaadin.flow.component.ClickEvent;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.ComponentEventListener;
 import com.vaadin.flow.component.Composite;
@@ -13,7 +9,6 @@ import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.dependency.Uses;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
-import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Hr;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.icon.Icon;
@@ -24,14 +19,10 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.tabs.TabSheet;
 import com.vaadin.flow.component.timepicker.TimePicker;
 import com.vaadin.flow.data.provider.ListDataProvider;
-import com.vaadin.flow.function.ValueProvider;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.Command;
-import com.vaadin.flow.shared.Registration;
 import com.vaadin.flow.theme.lumo.LumoUtility.Gap;
-import de.f0rce.ace.AceEditor;
-import de.f0rce.ace.enums.AceMode;
 import de.f0rce.ace.enums.AceTheme;
 import graph.seraph.events.PGraph;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,23 +31,16 @@ import org.streamreasoning.gsp.config.QueryConfigLoader;
 import org.streamreasoning.gsp.data.GraphDataComponent;
 import org.streamreasoning.gsp.services.DataComponent;
 import org.streamreasoning.gsp.services.SeraphService;
-import org.streamreasoning.gsp.views.modular.InputRow;
-import org.streamreasoning.gsp.views.modular.ModularTabSheet;
-import org.streamreasoning.gsp.views.modular.ProgressiveStreamView;
+import org.streamreasoning.gsp.views.modular.*;
 import org.vaadin.addons.visjs.network.main.Edge;
-import org.vaadin.addons.visjs.network.main.NetworkDiagram;
 import org.vaadin.addons.visjs.network.main.Node;
 import org.vaadin.addons.visjs.network.options.Interaction;
 import org.vaadin.addons.visjs.network.options.Options;
-import org.vaadin.addons.visjs.network.options.edges.ArrowHead;
-import org.vaadin.addons.visjs.network.options.edges.Arrows;
 import org.vaadin.addons.visjs.network.options.physics.Physics;
 import org.vaadin.addons.visjs.network.options.physics.Repulsion;
 import org.vaadin.addons.visjs.network.options.physics.Stabilization;
-import org.vaadin.addons.visjs.network.util.Shape;
 
 import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -91,6 +75,7 @@ public class PGSModular extends Composite<VerticalLayout> {
 
         InputRow inputRow = new InputRow();
         ProgressiveStreamView streamView = inputRow.getStreamView();
+        streamView.reload("testGraph", 35); //todo distinguish capacity of the view from the number of events available per stream.
 
         HorizontalLayout operationRow = new HorizontalLayout();
 
@@ -138,27 +123,15 @@ public class PGSModular extends Composite<VerticalLayout> {
 
         ModularTabSheet.SmartTab[] queryingTabs = queryingTabSheet.initialise(2);
 
-        AceEditor editor = new AceEditor();
-        editor.setValue(config.getDefaultQuery().getQuery_template());
-
-        HorizontalLayout trash = new HorizontalLayout();
+        SmartEditor editor = new SmartEditor(config.getDefaultQuery().getQuery_template());
+        RegisteredQueries registeredQueries = new RegisteredQueries();
 
         select.addValueChangeListener(event -> {
-            Notification.show(event.getValue());
-            Component ig;
-//            moveEvent(nextEventWindow, trash, 0, "#f0f0f0", "120px");
-            trash.removeAll();
-
             QueryConfig.QueryDefinition queryByName = config.getQueryByName(event.getValue());
-
             streamView.reload("testGraph", 35); //todo distinguish capacity of the view from the number of events available per stream.
-
             if (queryByName != null) {
                 editor.setValue(queryByName.getQuery_template());
-//                seraphService.sendEvent("testGraph", queryByName.getInput_stream());
-//                loadEvent(nextEventWindow);
             } else Notification.show("Selected Stream [" + event.getValue() + "] does not have a corresponding query");
-
         });
 
 //
@@ -174,9 +147,20 @@ public class PGSModular extends Composite<VerticalLayout> {
 
         //the result table should be generated based on binding plus the two validity columns
 
-        VerticalLayout outputRowContainer = new VerticalLayout();
+        ReactiveVerticalLayout outputRowContainer = new ReactiveVerticalLayout();
+        ModularTabSheet outputTabSheet = new ModularTabSheet();
+        outputTabSheet.setWidthFull();
+        outputTabSheet.setHeightFull();
+        outputRowContainer.add(outputTabSheet);
 
-        Grid<String> registeredQueries = addRegisteredQueries(queryingTabSheet, outputRowContainer);
+
+//        Grid<String> registeredQueries = addRegisteredQueries(queryingTabSheet, outputRowContainer);
+
+        outputRowContainer.addMyCustomEventListener((ComponentEventListener<QueryDeletionEvent>) event -> {
+            seraphService.unregisterQuery(event.id);
+            outputRowContainer.getChildren().filter(c -> event.id.equals(c.getId().get())).findFirst().ifPresent(Component::removeFromParent);
+        });
+
 
         //Control Row with all buttons
         HorizontalLayout controlRow = new HorizontalLayout();
@@ -189,14 +173,13 @@ public class PGSModular extends Composite<VerticalLayout> {
         Button realTimeButton = new Button("Real-Time");
         Button stopButton = new Button("Pause Computation");
 
-        sendQuery.addClickListener(click -> seraphService.registerNewQuery(inputStream, snapshotGraphFunction, snapshotGraphSolo, time_varying_table, timePicker, processingTabSheet, editor, outputRowContainer));
+        sendQuery.addClickListener(click -> seraphService.registerNewQuery2(inputStream, snapshotGraphFunction, snapshotGraphSolo, time_varying_table, timePicker, processingTabSheet, editor, outputTabSheet));
 
         ingestOneEvent(nextEventButton, streamView, nextEventWindow, snapshotGraphFunction, snapshotGraphSolo, outputRowContainer);
         startRuntimeIngestion(realTimeButton, streamView, nextEventWindow);
         stopRuntimeIngestion(stopButton, realTimeButton);
 
         /// Sizing Components
-        setUpAce(editor);
 
         outerNextEvent.setWidth("100%");
         outerNextEvent.setHeight("100%");
@@ -309,8 +292,24 @@ public class PGSModular extends Composite<VerticalLayout> {
         processingTabs[2].add("Snapshot Graph", snapshotGraphSolo);
 
         operationRow.add(queryingTabSheet);
+
         queryingTabs[0].add("Query Editor", editor);
         queryingTabs[1].add("Registered Queries", registeredQueries);
+
+        queryingTabSheet.addSelectedChangeListener((ComponentEventListener<TabSheet.SelectedChangeEvent>) event -> {
+            if (event.getSelectedTab().getLabel().equals("Registered Queries")) {
+                if (seraphService != null) {
+                    registeredQueries.refresh(seraphService.listQueries().stream().map(q -> {
+                        QueryRow queryRow = new QueryRow();
+                        queryRow.id = q;
+                        queryRow.projectionVar = seraphService.getResultVars(q);
+                        queryRow.plan = seraphService.getQueryPlan(q);
+                        return queryRow;
+                    }).toList());
+                }
+            }
+        });
+
 
         getContent().add(new Hr());
 
@@ -353,185 +352,6 @@ public class PGSModular extends Composite<VerticalLayout> {
 //        componentAt.diagramFit();
     }
 
-    private NetworkDiagram queryPlanPlaceHolder() {
-        final NetworkDiagram plan = new NetworkDiagram(Options.builder().withWidth("100%").withHeight("100%").build());
-        final List<Node> nodes = new LinkedList<>();
-        final List<Edge> edges = new LinkedList<>();
-        AtomicInteger idCounter = new AtomicInteger();
-
-        Node e = new Node("0", "ProduceResults ");
-        e.setShape(Shape.square);
-        nodes.add(e);
-
-        Node e1 = new Node("1", "Filter ");
-        e1.setShape(Shape.square);
-
-        nodes.add(e1);
-        Node e2 = new Node("2", "DirectedRelationshipTypeScan ");
-        e2.setShape(Shape.square);
-        nodes.add(e2);
-
-        Edge e3 = new Edge("0", "1");
-        e3.setArrows(new Arrows(new ArrowHead()));
-        edges.add(e3);
-        Edge e4 = new Edge("1", "2");
-        e4.setArrows(new Arrows(new ArrowHead()));
-        edges.add(e4);
-
-        final var dataProvider = new ListDataProvider<Node>(nodes);
-        final var edgeProvider = new ListDataProvider<Edge>(edges);
-
-        plan.setNodesDataProvider(dataProvider);
-        plan.setEdgesDataProvider(edgeProvider);
-
-        return plan;
-
-    }
-
-    public static void setUpAce(AceEditor ace) {
-
-        //
-//        ArrayList<String> custom = new ArrayList<String>();
-//        custom.add("REGISTER");
-//        custom.add("QUERY");
-//        custom.add("MATCH");
-//        custom.add("WHERE");
-//        custom.add("STARTING");
-//        custom.add("WITH");
-//        custom.add("WITHIN");
-//        custom.add("AT");
-//        custom.add("EMIT");
-//        custom.add("SNAPSHOT");
-//        custom.add("ON");
-//        custom.add("ENTERING");
-//        custom.add("EVERY");
-//        custom.add("EMIT");
-        //
-//        AceCustomMode customMode = new AceCustomMode();
-
-//        AceCustomModeRule keywords = new AceCustomModeRule();
-//        keywords.setRegex("[a-zA-Z_$][a-zA-Z0-9_$]*\\b");
-//        keywords.setKeywordMapper(
-//                Map.of(
-//                        AceCustomModeTokens.KEYWORD, String.join("|", custom)
-//                ),
-//                AceCustomModeTokens.IDENTIFIER,
-//                true,
-//                "|"
-//        );
-
-
-//        ArrayList<String> fs = new ArrayList<String>();
-//        fs.add("allShortestPaths");
-
-//        AceCustomModeRule functions = new AceCustomModeRule();
-//        functions.setRegex("[a-z][a-zA-Z0-9]*\\b");
-//        functions.setKeywordMapper(
-//                Map.of(AceCustomModeTokens.VARIABLE, String.join("|", fs)),
-//                AceCustomModeTokens.VARIABLE,
-//                true,
-//                "|"
-//        );
-
-
-//        AceCustomModeRule lineComment = new AceCustomModeRule();
-//        lineComment.setRegex("--.*$");
-//        lineComment.setToken(AceCustomModeTokens.COMMENT);
-        //
-//        AceCustomModeRule blockComment = new AceCustomModeRule();
-//        blockComment.setStart("/\\*");
-//        blockComment.setEnd("\\*/");
-//        blockComment.setToken(AceCustomModeTokens.COMMENT);
-        //
-//        customMode.addState(
-//                "start",
-//                lineComment,
-//                blockComment,
-//                functions,
-//                keywords
-//        );
-
-//        ace.addCustomMode("cypher", customMode);
-//        ace.setCustomMode("cypher");
-        ace.setMode(AceMode.sql);
-    }
-
-    private Grid<String> addRegisteredQueries(TabSheet queryingTab, VerticalLayout outputRow) {
-        Grid<String> registeredQueryTable = new Grid();
-        registeredQueryTable.setId("Registered Queries");
-        registeredQueryTable.setSelectionMode(Grid.SelectionMode.SINGLE);
-
-        List<String> items = new ArrayList<>();
-        ListDataProvider<String> mapDP = new SeraphService.MyDataProvider<>(items);
-        registeredQueryTable.setDataProvider(mapDP);
-
-        registeredQueryTable.addColumn(map -> map).setHeader("QID");
-        registeredQueryTable.addColumn(map -> seraphService.getResultVars(map)).setHeader("Projections");
-
-
-        registeredQueryTable.addComponentColumn((ValueProvider<String, Component>) seraphQuery -> {
-
-            Button viewPlan = new Button("P");
-            viewPlan.addClassName("special");
-            viewPlan.setHeight("90%");
-            viewPlan.setWidth("min-content");
-            viewPlan.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_ICON);
-
-            NetworkDiagram queryPlan = queryPlanPlaceHolder();
-            Popup popup = new Popup();
-            popup.setFor("id-of-target-element");
-            VerticalLayout popupContent = new VerticalLayout();
-            popupContent.add(new H2("Query Plan"));
-            popupContent.add(queryPlan);
-            popupContent.add(new HorizontalLayout(new Button("Action 1"), new Button("Action 2")));
-            popupContent.setWidth("40rem");
-            popupContent.setHeight("40rem");
-            popupContent.setAlignItems(FlexComponent.Alignment.CENTER);
-            popup.add(popupContent);
-            popup.setPosition(PopupPosition.END);
-            popup.setAlignment(PopupAlignment.CENTER);
-            viewPlan.addClickListener((ComponentEventListener<ClickEvent<Button>>) click -> {
-                Notification.show("cliccked");
-                popup.show();
-            });
-
-            outputRow.add(popup);
-
-            return viewPlan;
-        }).setHeader("Plan");
-
-
-        registeredQueryTable.addComponentColumn((ValueProvider<String, Component>) seraphQuery -> {
-            Button removeQuery = new Button("X");
-            removeQuery.addClassName("special");
-            removeQuery.setHeight("90%");
-            removeQuery.setWidth("min-content");
-            removeQuery.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_ERROR);
-
-            Registration r = removeQuery.addClickListener((ComponentEventListener<ClickEvent<Button>>) click -> {
-                String id = seraphQuery;
-                Notification.show(id);
-                seraphService.unregisterQuery(id);
-                items.remove(seraphQuery);
-                mapDP.refreshAll();
-                outputRow.getChildren().filter(c -> id.equals(c.getId().get())).findFirst().ifPresent(Component::removeFromParent);
-            });
-
-            return removeQuery;
-        }).setHeader("");
-
-        queryingTab.addSelectedChangeListener((ComponentEventListener<TabSheet.SelectedChangeEvent>) event -> {
-            if (event.getSelectedTab().getLabel().equals("Registered Queries")) {
-                if (seraphService != null) {
-                    items.clear();
-                    items.addAll(seraphService.listQueries());
-                    mapDP.refreshAll();
-                }
-            }
-        });
-
-        return registeredQueryTable;
-    }
 
     private Button ingestOneEvent(Button nextEventButton, ProgressiveStreamView streamView, HorizontalLayout nextEventWindow, DataComponent snapshotGraphFunction, DataComponent snapshotGraphSolo, VerticalLayout outeroutputRow) {
         nextEventButton.addClickListener(e -> {
@@ -556,13 +376,13 @@ public class PGSModular extends Composite<VerticalLayout> {
 //
 //            Notification.show("testGraph", 500, Notification.Position.BOTTOM_CENTER);
 
-            seraphQueries.forEach(q -> {
-                HorizontalLayout outputRow = (HorizontalLayout) outeroutputRow.getChildren().filter(c -> q.equals(c.getId().get())).findFirst().get();
-                if (outputRow.getComponentCount() > 5) {
-                    outputRow.remove(outputRow.getComponentAt(0));
-                }
-
-            });
+            //            seraphQueries.forEach(q -> {
+            //                HorizontalLayout outputRow = (HorizontalLayout) outeroutputRow.getChildren().filter(c -> q.equals(c.getId().get())).findFirst().get();
+            //                if (outputRow.getComponentCount() > 5) {
+            //                    outputRow.remove(outputRow.getComponentAt(0));
+            //                }
+            //
+            //            });
 
             // if (streamView.getComponentCount() > 15) {
             //     streamView.remove(streamView.getComponentAt(0));
@@ -575,7 +395,7 @@ public class PGSModular extends Composite<VerticalLayout> {
         return nextEventButton;
     }
 
-    private Button startRuntimeIngestion(Button realTimeButton, HorizontalLayout streamView, HorizontalLayout nextEventWindow) {
+    private Button startRuntimeIngestion(Button realTimeButton, ProgressiveStreamView streamView, HorizontalLayout nextEventWindow) {
         realTimeButton.addClickListener(e -> {
             paused = !paused;
             getUI().ifPresent(ui -> {
@@ -583,11 +403,13 @@ public class PGSModular extends Composite<VerticalLayout> {
                     while (!paused) {
                         try {
                             ui.access((Command) () -> {
-                                String s = "100%";
-                                Component pGraph3 = seraphService.sendEvent("testGraph", inputStream);
-                                pGraph3.getStyle().setWidth(s).setHeight(s);
-                                moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
-                                loadEvent(nextEventWindow, pGraph3);
+                                PGraph currentEvent = (PGraph) streamView.getCurrentEvent();
+                                seraphService.sendEvent(currentEvent, inputStream);
+//                                String s = "100%";
+//                                Component pGraph3 = seraphService.sendEvent("testGraph", inputStream);
+//                                pGraph3.getStyle().setWidth(s).setHeight(s);
+//                                moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
+//                                loadEvent(nextEventWindow, pGraph3);
                             });
 
                             Thread.sleep(1000);

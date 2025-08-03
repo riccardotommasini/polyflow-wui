@@ -22,10 +22,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ProgressiveStreamView extends HorizontalLayout {
 
     private int capacity;
-    HorizontalLayout streamView = new HorizontalLayout();
-    Icon refreshIcon = new Icon(VaadinIcon.ARROW_UP);
+    private final HorizontalLayout streamView = new HorizontalLayout();
+    private final Icon refreshIcon = new Icon(VaadinIcon.ARROW_UP);
     public final AtomicInteger eventCounter = new AtomicInteger(0);
-    public String CurrentEvent;
+    public String currentEventIndex;
 
     public ProgressiveStreamView(int capacity) {
         this.capacity = capacity;
@@ -88,7 +88,7 @@ public class ProgressiveStreamView extends HorizontalLayout {
     public void reload(String event, int capacity) {
         streamView.removeAll();
         eventCounter.set(0);
-        this.CurrentEvent = event;
+        this.currentEventIndex = event;
         this.capacity = capacity;
         for (int i = 0; i <= capacity; i++) {
             HorizontalLayout cursor = new HorizontalLayout();
@@ -100,14 +100,14 @@ public class ProgressiveStreamView extends HorizontalLayout {
             if (i == 0) {
                 cursor.add(refreshIcon);
             }
-            this.CurrentEvent = event;
-            streamView.add(new VerticalLayout(e, cursor));
+            this.currentEventIndex = event;
+            streamView.add(new VerticalLayout(e, cursor, e.popup()));
         }
     }
 
     public Object getCurrentEvent() {
         if (eventCounter.compareAndSet(capacity, 0)) {
-            reload(CurrentEvent, capacity);
+            reload(currentEventIndex, capacity);
             return ((InputGraph) streamView.getChildren().toList().get(eventCounter.get()).getChildren().toList().get(0)).event;
         }
 
