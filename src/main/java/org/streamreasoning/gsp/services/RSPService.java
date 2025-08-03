@@ -78,7 +78,7 @@ public class RSPService extends QueryService<Graph, Graph, JenaGraphOrBindings, 
         final InputGraph event = new InputGraph(Options.builder()
                 //.withWidth(s).withHeight(s).withAutoResize(true)
 //                        .withLayout(layout)
-                .withPhysics(physics).withInteraction(Interaction.builder().withMultiselect(true).build()).build(), System.currentTimeMillis());
+                .withPhysics(physics).withInteraction(Interaction.builder().withMultiselect(true).build()).build(), System.currentTimeMillis(), pGraph);
 
         List<Node> nodes = new ArrayList<>();
         List<Edge> edges = new ArrayList<>();

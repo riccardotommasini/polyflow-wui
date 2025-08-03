@@ -1,5 +1,8 @@
 package org.streamreasoning.gsp.views;
 
+import com.vaadin.componentfactory.Popup;
+import com.vaadin.componentfactory.PopupAlignment;
+import com.vaadin.componentfactory.PopupPosition;
 import com.vaadin.flow.component.ClickEvent;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.ComponentEventListener;
@@ -10,6 +13,7 @@ import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.dependency.Uses;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
+import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Hr;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.icon.Icon;
@@ -29,14 +33,16 @@ import com.vaadin.flow.theme.lumo.LumoUtility.Gap;
 import de.f0rce.ace.AceEditor;
 import de.f0rce.ace.enums.AceMode;
 import de.f0rce.ace.enums.AceTheme;
+import graph.seraph.events.PGraph;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.streamreasoning.gsp.data.GraphDataComponent;
 import org.streamreasoning.gsp.config.QueryConfig;
 import org.streamreasoning.gsp.config.QueryConfigLoader;
+import org.streamreasoning.gsp.data.GraphDataComponent;
 import org.streamreasoning.gsp.services.DataComponent;
 import org.streamreasoning.gsp.services.SeraphService;
 import org.streamreasoning.gsp.views.modular.InputRow;
 import org.streamreasoning.gsp.views.modular.ModularTabSheet;
+import org.streamreasoning.gsp.views.modular.ProgressiveStreamView;
 import org.vaadin.addons.visjs.network.main.Edge;
 import org.vaadin.addons.visjs.network.main.NetworkDiagram;
 import org.vaadin.addons.visjs.network.main.Node;
@@ -62,6 +68,7 @@ public class PGSModular extends Composite<VerticalLayout> {
     static AtomicInteger eventCounter = new AtomicInteger();
     static boolean paused = true;
     static String inputStream = "http://stream1";
+    private final Options.Builder builder;
     private String labels = "Bike;Station";
     QueryConfig config = QueryConfigLoader.load("queries-config.yaml");
 
@@ -79,11 +86,11 @@ public class PGSModular extends Composite<VerticalLayout> {
         Repulsion repulsion = new Repulsion();
         repulsion.setNodeDistance(100);
         physics.setRepulsion(repulsion);
-        Options.Builder builder = Options.builder().withWidth("100%").withHeight("100%").withPhysics(physics).withInteraction(Interaction.builder().withMultiselect(true).build());
+        this.builder = Options.builder().withWidth("100%").withHeight("100%").withPhysics(physics).withInteraction(Interaction.builder().withMultiselect(true).build());
 
 
         InputRow inputRow = new InputRow();
-        HorizontalLayout streamView = inputRow.getStreamView();
+        ProgressiveStreamView streamView = inputRow.getStreamView();
 
         HorizontalLayout operationRow = new HorizontalLayout();
 
@@ -129,7 +136,7 @@ public class PGSModular extends Composite<VerticalLayout> {
 
         ModularTabSheet queryingTabSheet = new ModularTabSheet();
 
-        ModularTabSheet.SmartTab[] queryingTabs = queryingTabSheet.initialise(3);
+        ModularTabSheet.SmartTab[] queryingTabs = queryingTabSheet.initialise(2);
 
         AceEditor editor = new AceEditor();
         editor.setValue(config.getDefaultQuery().getQuery_template());
@@ -139,15 +146,17 @@ public class PGSModular extends Composite<VerticalLayout> {
         select.addValueChangeListener(event -> {
             Notification.show(event.getValue());
             Component ig;
-            moveEvent(nextEventWindow, trash, 0, "#f0f0f0", "120px");
+//            moveEvent(nextEventWindow, trash, 0, "#f0f0f0", "120px");
             trash.removeAll();
-            //TODO here we need to make it load from a folder of use-cases, consider moving the switch case on the service side
 
             QueryConfig.QueryDefinition queryByName = config.getQueryByName(event.getValue());
+
+            streamView.reload("testGraph", 35); //todo distinguish capacity of the view from the number of events available per stream.
+
             if (queryByName != null) {
                 editor.setValue(queryByName.getQuery_template());
-                seraphService.sendEvent("testGraph", queryByName.getInput_stream());
-                loadEvent(nextEventWindow);
+//                seraphService.sendEvent("testGraph", queryByName.getInput_stream());
+//                loadEvent(nextEventWindow);
             } else Notification.show("Selected Stream [" + event.getValue() + "] does not have a corresponding query");
 
         });
@@ -246,18 +255,28 @@ public class PGSModular extends Composite<VerticalLayout> {
         getContent().setWidth("100%");
         getContent().getStyle().set("flex-grow", "1");
         inputRow.setWidthFull();
-        getContent().setFlexGrow(1.0, inputRow);
+        getContent().setFlexGrow(0.2, inputRow);
         inputRow.setHeight("100px");
         inputRow.setSpacing(false);
 
+        streamView.setHeight("100%");
+        streamView.setWidthFull();
+        streamView.getStyle().setBorder("dotted");
+        streamView.getStyle().set("border-color", "red");
+        streamView.getStyle().set("overflow-x", "auto");
+        streamView.setJustifyContentMode(FlexComponent.JustifyContentMode.START);
+        streamView.getStyle().set("margin-left", "20px");
+        streamView.getStyle().set("margin-right", "20px");
+        streamView.getStyle().set("background-color", "#f0f0f0"); // Use your desired color code
+
         operationRow.setWidthFull();
-        getContent().setFlexGrow(1.0, operationRow);
+        getContent().setFlexGrow(0.4, operationRow);
         operationRow.addClassName(Gap.MEDIUM);
         operationRow.setWidth("100%");
         operationRow.setHeight("40%");
 
         controlRow.setWidthFull();
-        getContent().setFlexGrow(1.0, controlRow);
+        getContent().setFlexGrow(0.1, controlRow);
         controlRow.addClassName(Gap.SMALL);
         controlRow.setWidth("100%");
         controlRow.setHeight("70px");
@@ -273,7 +292,7 @@ public class PGSModular extends Composite<VerticalLayout> {
         rightControl.setHeight("100%");
 
         outputRowContainer.setWidthFull();
-        getContent().setFlexGrow(1.0, outputRowContainer);
+        getContent().setFlexGrow(0.3, outputRowContainer);
         outputRowContainer.addClassName(Gap.MEDIUM);
         outputRowContainer.setWidth("100%");
         outputRowContainer.setHeight("30%");
@@ -291,8 +310,7 @@ public class PGSModular extends Composite<VerticalLayout> {
 
         operationRow.add(queryingTabSheet);
         queryingTabs[0].add("Query Editor", editor);
-        queryingTabs[1].add("Query Plan", queryPlanPlaceHolder());
-        queryingTabs[2].add("Queries", registeredQueries);
+        queryingTabs[1].add("Registered Queries", registeredQueries);
 
         getContent().add(new Hr());
 
@@ -335,7 +353,7 @@ public class PGSModular extends Composite<VerticalLayout> {
 //        componentAt.diagramFit();
     }
 
-    private static NetworkDiagram queryPlanPlaceHolder() {
+    private NetworkDiagram queryPlanPlaceHolder() {
         final NetworkDiagram plan = new NetworkDiagram(Options.builder().withWidth("100%").withHeight("100%").build());
         final List<Node> nodes = new LinkedList<>();
         final List<Edge> edges = new LinkedList<>();
@@ -439,20 +457,51 @@ public class PGSModular extends Composite<VerticalLayout> {
     }
 
     private Grid<String> addRegisteredQueries(TabSheet queryingTab, VerticalLayout outputRow) {
+        Grid<String> registeredQueryTable = new Grid();
+        registeredQueryTable.setId("Registered Queries");
+        registeredQueryTable.setSelectionMode(Grid.SelectionMode.SINGLE);
 
-        Grid<String> g = new Grid();
         List<String> items = new ArrayList<>();
-
-        g.setSelectionMode(Grid.SelectionMode.SINGLE);
-
         ListDataProvider<String> mapDP = new SeraphService.MyDataProvider<>(items);
-        g.setDataProvider(mapDP);
-//                    g.addColumn(map -> ts).setHeader("Id");
-        g.setId("Registered Queries");
+        registeredQueryTable.setDataProvider(mapDP);
 
-        g.addColumn(map -> map).setHeader("QID");
-        g.addColumn(map -> seraphService.getResultVars(map)).setHeader("Projections");
-        g.addComponentColumn((ValueProvider<String, Component>) seraphQuery -> {
+        registeredQueryTable.addColumn(map -> map).setHeader("QID");
+        registeredQueryTable.addColumn(map -> seraphService.getResultVars(map)).setHeader("Projections");
+
+
+        registeredQueryTable.addComponentColumn((ValueProvider<String, Component>) seraphQuery -> {
+
+            Button viewPlan = new Button("P");
+            viewPlan.addClassName("special");
+            viewPlan.setHeight("90%");
+            viewPlan.setWidth("min-content");
+            viewPlan.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_ICON);
+
+            NetworkDiagram queryPlan = queryPlanPlaceHolder();
+            Popup popup = new Popup();
+            popup.setFor("id-of-target-element");
+            VerticalLayout popupContent = new VerticalLayout();
+            popupContent.add(new H2("Query Plan"));
+            popupContent.add(queryPlan);
+            popupContent.add(new HorizontalLayout(new Button("Action 1"), new Button("Action 2")));
+            popupContent.setWidth("40rem");
+            popupContent.setHeight("40rem");
+            popupContent.setAlignItems(FlexComponent.Alignment.CENTER);
+            popup.add(popupContent);
+            popup.setPosition(PopupPosition.END);
+            popup.setAlignment(PopupAlignment.CENTER);
+            viewPlan.addClickListener((ComponentEventListener<ClickEvent<Button>>) click -> {
+                Notification.show("cliccked");
+                popup.show();
+            });
+
+            outputRow.add(popup);
+
+            return viewPlan;
+        }).setHeader("Plan");
+
+
+        registeredQueryTable.addComponentColumn((ValueProvider<String, Component>) seraphQuery -> {
             Button removeQuery = new Button("X");
             removeQuery.addClassName("special");
             removeQuery.setHeight("90%");
@@ -471,7 +520,6 @@ public class PGSModular extends Composite<VerticalLayout> {
             return removeQuery;
         }).setHeader("");
 
-
         queryingTab.addSelectedChangeListener((ComponentEventListener<TabSheet.SelectedChangeEvent>) event -> {
             if (event.getSelectedTab().getLabel().equals("Registered Queries")) {
                 if (seraphService != null) {
@@ -482,10 +530,10 @@ public class PGSModular extends Composite<VerticalLayout> {
             }
         });
 
-        return g;
+        return registeredQueryTable;
     }
 
-    private Button ingestOneEvent(Button nextEventButton, HorizontalLayout streamView, HorizontalLayout nextEventWindow, DataComponent snapshotGraphFunction, DataComponent snapshotGraphSolo, VerticalLayout outeroutputRow) {
+    private Button ingestOneEvent(Button nextEventButton, ProgressiveStreamView streamView, HorizontalLayout nextEventWindow, DataComponent snapshotGraphFunction, DataComponent snapshotGraphSolo, VerticalLayout outeroutputRow) {
         nextEventButton.addClickListener(e -> {
 
             List<String> seraphQueries = seraphService.listQueries();
@@ -495,14 +543,18 @@ public class PGSModular extends Composite<VerticalLayout> {
                 return;
             }
 
-            eventCounter.compareAndSet(10, 0);
+            PGraph currentEvent = (PGraph) streamView.getCurrentEvent();
 
-            moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
+            seraphService.sendEvent(currentEvent, inputStream);
 
-            Component pg = seraphService.sendEvent("testGraph", inputStream);
-            loadEvent(nextEventWindow, pg);
-
-            Notification.show("testGraph", 500, Notification.Position.BOTTOM_CENTER);
+//            eventCounter.compareAndSet(10, 0);
+//
+//            moveEvent(nextEventWindow, streamView, 0, "#f0f0f0", "120px");
+//
+//            Component pg = seraphService.sendEvent("testGraph", inputStream);
+//            loadEvent(nextEventWindow, pg);
+//
+//            Notification.show("testGraph", 500, Notification.Position.BOTTOM_CENTER);
 
             seraphQueries.forEach(q -> {
                 HorizontalLayout outputRow = (HorizontalLayout) outeroutputRow.getChildren().filter(c -> q.equals(c.getId().get())).findFirst().get();

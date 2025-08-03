@@ -13,6 +13,7 @@ import com.vaadin.flow.component.timepicker.TimePicker;
 import com.vaadin.flow.data.provider.ListDataProvider;
 import com.vaadin.flow.theme.lumo.LumoUtility;
 import de.f0rce.ace.AceEditor;
+import elemental.json.JsonArray;
 import graph.ContinuousQuery;
 import graph.seraph.events.PGraph;
 import graph.seraph.events.PGraphImpl;
@@ -21,6 +22,7 @@ import graph.seraph.events.Result;
 import graph.seraph.syntax.SeraphQueryFactory;
 import org.springframework.stereotype.Service;
 import org.streamreasoning.gsp.data.InputGraph;
+import org.streamreasoning.polyflow.api.processing.Task;
 import org.streamreasoning.polyflow.api.sds.SDS;
 import org.streamreasoning.polyflow.api.stream.data.DataStream;
 import org.streamreasoning.polyflow.base.processing.ContinuousProgramImpl;
@@ -32,7 +34,6 @@ import org.vaadin.addons.visjs.network.options.edges.ArrowHead;
 import org.vaadin.addons.visjs.network.options.edges.Arrows;
 import org.vaadin.addons.visjs.network.options.physics.Physics;
 import org.vaadin.addons.visjs.network.options.physics.Repulsion;
-import elemental.json.JsonArray;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -80,7 +81,7 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
 //                        .withLayout(layout)
                         .withPhysics(physics)
                         .withInteraction(Interaction.builder()
-                                .withMultiselect(true).build()).build(), pGraph.timestamp());
+                                .withMultiselect(true).build()).build(), pGraph.timestamp(), pGraph);
 
         List<Node> ns = Arrays.stream(pGraph.nodes()).sequential().map(n -> {
             Node node = new Node(n.id() + "", n.labels()[0] + "\n" + n.id());
@@ -132,9 +133,9 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
             if (nodesArray.length() > 0) {
                 String nodeIdFromJson = nodesArray.getString(0);
                 Node tmp = nodes.stream()
-                    .filter(node -> node.getId().equals(nodeIdFromJson))
-                    .findFirst()
-                    .orElse(null);
+                        .filter(node -> node.getId().equals(nodeIdFromJson))
+                        .findFirst()
+                        .orElse(null);
                 if (tmp != null) {
                     message.append("<br>").append(tmp.getLabel().replace("\n", " "));
                 }
@@ -143,10 +144,10 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
             // Handle edges
             if (edgesArray.length() > 0) {
                 String edgeIdFromJson = edgesArray.getString(0);
-                Edge tmpEdge = edges.stream() 
-                    .filter(edge -> edge.getId().equals(edgeIdFromJson))
-                    .findFirst()
-                    .orElse(null);
+                Edge tmpEdge = edges.stream()
+                        .filter(edge -> edge.getId().equals(edgeIdFromJson))
+                        .findFirst()
+                        .orElse(null);
                 if (tmpEdge != null) {
                     message.append("<br>").append(tmpEdge.getLabel().replace("\n", "<br>"));
                 }
@@ -164,17 +165,18 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
 
         return event;
 
-
     }
 
     private String register(String seraphQL, String stream) {
         try {
+            //TODO seraph parsers forgets the id of the query
             ContinuousQuery<PGraph, PGraph, PGraphOrResult, Result> q = SeraphQueryFactory.parse(seraphQL, stream);
             DataStream<PGraph> inputStreamColors = q.instream().get(0);
             streams.put(stream, inputStreamColors);
             DataStream<Result> outStream = q.outstream();
             queries.put(q.id(), q);
-            cp.buildTask(q.getTask(), Collections.singletonList(inputStreamColors), Collections.singletonList(outStream));
+            Task<PGraph, PGraph, PGraphOrResult, Result> task = q.getTask();
+            cp.buildTask(task, Collections.singletonList(inputStreamColors), Collections.singletonList(outStream));
             return q.id();
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -285,6 +287,13 @@ public class SeraphService extends QueryService<PGraph, PGraph, PGraphOrResult, 
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
+    }
+
+    public void sendEvent(PGraph event, String stream) {
+        streams.computeIfPresent(stream, (s, pGraphDataStream) -> {
+            pGraphDataStream.put(event, System.currentTimeMillis());
+            return pGraphDataStream;
+        });
     }
 
 

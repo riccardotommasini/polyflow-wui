@@ -36,6 +36,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.streamreasoning.gsp.data.GraphDataComponent;
 import org.streamreasoning.gsp.services.DataComponent;
 import org.streamreasoning.gsp.services.SeraphService;
+import org.streamreasoning.gsp.views.modular.ProgressiveStreamView;
 import org.vaadin.addons.visjs.network.main.Edge;
 import org.vaadin.addons.visjs.network.main.NetworkDiagram;
 import org.vaadin.addons.visjs.network.main.Node;
@@ -75,7 +76,7 @@ public class PGS extends Composite<VerticalLayout> {
     public PGS() {
 
         HorizontalLayout inputRow = new HorizontalLayout();
-        HorizontalLayout streamView = new HorizontalLayout();
+        HorizontalLayout streamView = new ProgressiveStreamView(20);
         streamView.setHeight("100%");
 
         List<Node> placehodlerNodes = new LinkedList<>();
@@ -121,7 +122,7 @@ public class PGS extends Composite<VerticalLayout> {
         placeHolder1.diagramFit();
         placeHolder2.diagramFit();
 
-        streamView.getStyle().set("background-color", "#f0f0f0"); // Use your desired color code
+//        streamView.getStyle().set("background-color", "#f0f0f0"); // Use your desired color code
 
         inputRow.add(streamView);
         inputRow.setFlexGrow(1.0, streamView);
@@ -344,7 +345,7 @@ public class PGS extends Composite<VerticalLayout> {
         getContent().getStyle().set("flex-grow", "1");
         inputRow.setWidthFull();
         getContent().setFlexGrow(1.0, inputRow);
-        inputRow.setHeight("100px");
+        inputRow.setHeight("150px");
         inputRow.setSpacing(false);
 
         queryRow.setWidthFull();

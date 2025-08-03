@@ -16,7 +16,7 @@ import java.util.List;
 
 public class InputRow extends HorizontalLayout {
 
-    HorizontalLayout streamView;
+    ProgressiveStreamView streamView;
 
     public InputRow() {
 
@@ -57,21 +57,18 @@ public class InputRow extends HorizontalLayout {
         placeHolder1.diagramFit();
         placeHolder2.diagramFit();
 
-        this.streamView = new HorizontalLayout();
-        streamView.setHeight("100%");
-        streamView.getStyle().setBorder("dotted");
-        streamView.getStyle().set("border-color", "red");
-        streamView.getStyle().set("overflow-x", "auto");
-        streamView.setJustifyContentMode(FlexComponent.JustifyContentMode.START);
-        streamView.getStyle().set("margin-left", "20px");
-        streamView.getStyle().set("margin-right", "20px");
-        streamView.getStyle().set("background-color", "#f0f0f0"); // Use your desired color code
+        this.streamView = new ProgressiveStreamView(15);
+
         this.add(streamView);
-        this.setFlexGrow(1.0, streamView);
         this.add(placeHolder2);
+
+        this.setFlexGrow(0.1, placeHolder1);
+        this.setFlexGrow(0.1, placeHolder2);
+        this.setFlexGrow(0.8, streamView);
+
     }
 
-    public HorizontalLayout getStreamView() {
+    public ProgressiveStreamView getStreamView() {
         return streamView;
     }
 }
